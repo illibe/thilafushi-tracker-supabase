@@ -9255,11 +9255,29 @@ async function _dsSupabaseConnectCore(url,anonKey,opts){
 
     // ── Test connectivity / fetch existing row ────────
     let existingPayload=null;
-    const {data:rows,error:fetchErr}=await Promise.race([
+    // TEMP DEBUG (remove after diagnosis): log request target + timing.
+    console.log('[SB DEBUG] Supabase URL:',url);
+    console.log('[SB DEBUG] Table:','b2_tracker_data');
+    console.log('[SB DEBUG] Querying id:','main');
+    console.time('Supabase connect');
+    const _sbResp=await Promise.race([
       client.from('b2_tracker_data').select('payload').eq('id','main').maybeSingle(),
       new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),10000))
     ]);
+    console.timeEnd('Supabase connect');
+    // TEMP DEBUG (remove after diagnosis): full raw response fields.
+    console.log('[SB DEBUG] data:',_sbResp.data);
+    console.log('[SB DEBUG] error:',_sbResp.error);
+    console.log('[SB DEBUG] status:',_sbResp.status);
+    console.log('[SB DEBUG] statusText:',_sbResp.statusText);
+    console.log('[SB DEBUG] count:',_sbResp.count!==undefined?_sbResp.count:'(not present)');
+    if(_sbResp.data===null){
+      console.log("No row found for id='main'");
+    }
+    const {data:rows,error:fetchErr}=_sbResp;
     if(fetchErr&&fetchErr.code!=='PGRST205'&&!/does not exist|not found/i.test(fetchErr.message||'')){
+      // TEMP DEBUG (remove after diagnosis): full error object.
+      console.log('[SB DEBUG] fetchErr full object:',fetchErr);
       throw fetchErr;
     }
     if(rows&&rows.payload)existingPayload=rows.payload;
@@ -9333,6 +9351,9 @@ async function _dsSupabaseConnectCore(url,anonKey,opts){
     return true;
 
   }catch(e){
+    // TEMP DEBUG (remove after diagnosis): exact marker when the race's
+    // timeout branch is what rejected, vs. a real query/connection error.
+    if(e&&e.message==='timeout'){console.log('SUPABASE TIMEOUT');}
     console.error('Supabase connection error:',e); // detailed error for debugging
     if(window._DS._sbChannel){try{await window._DS._sbClient.removeChannel(window._DS._sbChannel);}catch(x){}window._DS._sbChannel=null;}
     window._DS._sbClient=null;

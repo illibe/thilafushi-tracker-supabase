@@ -1,0 +1,1 @@
+# thilafushi-tracker-supabase

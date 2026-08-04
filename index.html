@@ -9457,14 +9457,37 @@ async function updateUserProfile(client, authUuid, updates) {
 // Case C (both succeed): only then is success:true returned.
 // ============================================================================
 async function _dsCreateSupabaseAuthAndProfile(fields){
-  const client=window._DS&&window._DS._sbClient;
-  if(!client){
+  const sharedClient=window._DS&&window._DS._sbClient;
+  if(!sharedClient){
     return {success:false, stage:'connection', error:new Error('Not connected to Supabase')};
   }
   const {email,password,full_name,role,department,designation,status}=fields;
 
-  // STEP 1 + 2: create the Auth account, receive the UUID.
-  const {data:signUpData, error:authErr}=await client.auth.signUp({email,password});
+  // Isolated temporary client for this operation only. Config is read directly
+  // off the already-connected shared client's own public properties
+  // (supabaseUrl/supabaseKey — documented public fields of SupabaseClient in
+  // supabase-js v2), NOT re-entered from DEFAULT_SB_CONFIG or cfg.sb. This
+  // keeps a single source of truth: whatever URL/key the shared client is
+  // actually using (per-device saved config or the DEFAULT_SB_CONFIG
+  // fallback — either way) is exactly what this temporary client uses too.
+  //
+  // persistSession:false / autoRefreshToken:false / detectSessionInUrl:false
+  // mean this client never touches localStorage and never behaves as an
+  // ongoing session holder — it exists only for the duration of this
+  // function call. It has no realtime channel, no relationship to
+  // window._DS._sbClient, and is discarded (goes out of scope) when this
+  // function returns. It cannot affect the shared client's state, the
+  // ongoing b2_tracker_data realtime sync, or any future administrator
+  // Supabase Auth session on the shared client.
+  const sb=await _dsEnsureSupabaseSdk();
+  const tempClient=sb.createClient(sharedClient.supabaseUrl, sharedClient.supabaseKey, {
+    auth:{persistSession:false, autoRefreshToken:false, detectSessionInUrl:false}
+  });
+
+  // STEP 1 + 2: create the Auth account, receive the UUID. Runs entirely on
+  // the isolated temp client — the shared client's auth state is never
+  // touched by this call.
+  const {data:signUpData, error:authErr}=await tempClient.auth.signUp({email,password});
   if(authErr){
     return {success:false, stage:'auth', error:authErr}; // Case B — profiles never touched
   }
@@ -9474,16 +9497,22 @@ async function _dsCreateSupabaseAuthAndProfile(fields){
   }
 
   // STEP 3: create the matching profiles row (id MUST equal the Auth UUID).
-  let {error:profileErr}=await createUserProfile(client,{id:uid,email,full_name,role,department,designation,status});
+  // Must run on tempClient, not sharedClient: the profiles INSERT policy
+  // requires auth.uid() = id, which only holds for the session tempClient
+  // is currently holding (the new user's own, just-created session).
+  let {error:profileErr}=await createUserProfile(tempClient,{id:uid,email,full_name,role,department,designation,status});
   if(profileErr){
     // One retry for transient errors before treating this as Case A.
     await new Promise(r=>setTimeout(r,800));
-    ({error:profileErr}=await createUserProfile(client,{id:uid,email,full_name,role,department,designation,status}));
+    ({error:profileErr}=await createUserProfile(tempClient,{id:uid,email,full_name,role,department,designation,status}));
   }
-  // Clean up the auth session this signUp() call created in this shared
-  // client, regardless of outcome, so it doesn't sit around unused
-  // alongside the data-sync connection.
-  try{await client.auth.signOut();}catch(e){}
+  // Clean up the temp client's own session (invalidates its refresh token
+  // server-side). This is scoped entirely to tempClient — the shared
+  // client's connection/session, if it ever has one, is never referenced
+  // or touched anywhere in this function.
+  try{await tempClient.auth.signOut();}catch(e){}
+  // tempClient is not reassigned to window._DS or retained anywhere; it is
+  // discarded here as the function returns.
 
   if(profileErr){
     const likelyDuplicate = profileErr.code==='23503'; // FK violation: uid doesn't exist in auth.users —
@@ -13202,7 +13231,21 @@ function updateStats(){
   const allProgs=[];
   function collect(nodes){nodes.forEach(n=>{allProgs.push(calcProgress(n));collect(n.children||[]);});}
   collect(data.nodes);
-  const overall=allProgs.length?Math.round(allProgs.reduce((a,b)=>a+b,0)/allProgs.length):0;
+  // Task Fix (Program Progress KPI — single source of truth): this KPI must
+  // equal the same per-Program calcProgress() value(s) shown as each
+  // Program's row in Project Structure, not a flat average across every
+  // node at every depth of the tree (Program+Project+Task+Sub Task mixed
+  // together with equal weight) — that was a different statistic and
+  // diverges further as the tree grows. data.nodes are exactly the
+  // top-level Program (level 0) nodes, so calcProgress() applied only to
+  // them, averaged, is precisely "the same values Project Structure
+  // displays" — with one Program, this is now always identical to that
+  // Program's own row. calcProgress() itself is unchanged; only the set of
+  // nodes fed into this specific KPI changed. allProgs (used below for
+  // Completion Rate, which is intentionally a whole-tree statistic) is
+  // untouched.
+  const programProgs=data.nodes.map(n=>calcProgress(n));
+  const overall=programProgs.length?Math.round(programProgs.reduce((a,b)=>a+b,0)/programProgs.length):0;
   const c=countAll(data.nodes);
   document.getElementById('stat-overall').innerHTML=overall+'<span>%</span>';
   document.getElementById('stat-modules').textContent=data.nodes.length;

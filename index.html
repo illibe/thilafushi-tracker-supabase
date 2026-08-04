@@ -9392,6 +9392,107 @@ async function _dsAutoReconnect(){
   }catch(e){console.error('Data source auto-reconnect error:',e);}
 }
 
+// ============================================================================
+// Phase 1 (Supabase Authentication Foundation) — profile helper functions.
+// Brought in from the standalone Phase 1 file now that Phase 2 actually
+// calls them. Unchanged from their Phase 1 form.
+// ============================================================================
+async function createUserProfile(client, profile) {
+  if (!profile || !profile.id || !profile.email) {
+    return { data: null, error: new Error('createUserProfile requires at least { id, email }') };
+  }
+  const row = {
+    id: profile.id,
+    email: profile.email,
+    full_name: profile.full_name ?? null,
+    role: profile.role ?? null,
+    department: profile.department ?? null,
+    designation: profile.designation ?? null,
+    status: profile.status ?? 'active'
+  };
+  const { data, error } = await client.from('profiles').insert(row).select().maybeSingle();
+  return { data, error };
+}
+async function getUserProfileByAuthId(client, authUuid) {
+  if (!authUuid) {
+    return { data: null, error: new Error('getUserProfileByAuthId requires authUuid') };
+  }
+  const { data, error } = await client.from('profiles').select('*').eq('id', authUuid).maybeSingle();
+  return { data, error };
+}
+async function updateUserProfile(client, authUuid, updates) {
+  if (!authUuid) {
+    return { data: null, error: new Error('updateUserProfile requires authUuid') };
+  }
+  const allowedFields = ['full_name', 'role', 'department', 'designation', 'status', 'email'];
+  const patch = {};
+  for (const key of allowedFields) {
+    if (updates && Object.prototype.hasOwnProperty.call(updates, key)) patch[key] = updates[key];
+  }
+  if (Object.keys(patch).length === 0) {
+    return { data: null, error: new Error('updateUserProfile received no recognized fields to update') };
+  }
+  const { data, error } = await client.from('profiles').update(patch).eq('id', authUuid).select().maybeSingle();
+  return { data, error };
+}
+
+// ============================================================================
+// Phase 2 (Supabase Authentication — User Creation Only)
+// Orchestrates: auth.signUp() -> receive UUID -> insert profiles row.
+// Uses the public client.auth.signUp() API (works with the anon/publishable
+// key already in use everywhere else in this file) rather than
+// client.auth.admin.createUser() — the Admin API requires the service_role
+// key, which must never be present in client-side code, and this
+// application has no server component to hold that key safely.
+//
+// Case A (auth succeeds, profile insert fails): NOT silently continued.
+// One retry is attempted for transient errors; if it still fails, this
+// returns success:false with stage:'profile' and the auth uid so the
+// caller can surface a specific, non-generic message. There is no
+// client-safe way to delete the now-orphaned Auth account (that requires
+// the Admin API / service_role key, same limitation this codebase already
+// documents for the existing Firebase Auth path) — this is disclosed to
+// the caller, not hidden.
+// Case B (auth fails): returns immediately, profiles is never touched.
+// Case C (both succeed): only then is success:true returned.
+// ============================================================================
+async function _dsCreateSupabaseAuthAndProfile(fields){
+  const client=window._DS&&window._DS._sbClient;
+  if(!client){
+    return {success:false, stage:'connection', error:new Error('Not connected to Supabase')};
+  }
+  const {email,password,full_name,role,department,designation,status}=fields;
+
+  // STEP 1 + 2: create the Auth account, receive the UUID.
+  const {data:signUpData, error:authErr}=await client.auth.signUp({email,password});
+  if(authErr){
+    return {success:false, stage:'auth', error:authErr}; // Case B — profiles never touched
+  }
+  const uid=signUpData&&signUpData.user&&signUpData.user.id;
+  if(!uid){
+    return {success:false, stage:'auth', error:new Error('signUp() succeeded but returned no user id')};
+  }
+
+  // STEP 3: create the matching profiles row (id MUST equal the Auth UUID).
+  let {error:profileErr}=await createUserProfile(client,{id:uid,email,full_name,role,department,designation,status});
+  if(profileErr){
+    // One retry for transient errors before treating this as Case A.
+    await new Promise(r=>setTimeout(r,800));
+    ({error:profileErr}=await createUserProfile(client,{id:uid,email,full_name,role,department,designation,status}));
+  }
+  // Clean up the auth session this signUp() call created in this shared
+  // client, regardless of outcome, so it doesn't sit around unused
+  // alongside the data-sync connection.
+  try{await client.auth.signOut();}catch(e){}
+
+  if(profileErr){
+    const likelyDuplicate = profileErr.code==='23503'; // FK violation: uid doesn't exist in auth.users —
+    // typically means signUp() returned Supabase's obfuscated "already registered" response rather than a real new user.
+    return {success:false, stage:'profile', error:profileErr, uid, likelyDuplicate}; // Case A — disclosed, not silent
+  }
+  return {success:true, uid}; // Case C — only after BOTH operations complete successfully
+}
+
 function dsSupabaseDisconnect(){
   try{
     if(window._DS._sbChannel&&window._DS._sbClient)window._DS._sbClient.removeChannel(window._DS._sbChannel);
@@ -10370,8 +10471,33 @@ async function umCreateUser(){
   }
 
   // Existing local account creation (default — used whenever Firebase Auth is not enabled)
+  // UNCHANGED: this is exactly what ran before Phase 2. Existing login, session,
+  // and permissions all continue to depend on this local account only.
   await _umCreateLocalAccount(users,fullName,username,employeeNo,department,password,role,status);
-  toast('User "'+username+'" created ('+role+')');
+
+  // Phase 2 addition: also provision the user in Supabase Authentication + profiles.
+  // This is additive and best-effort relative to the local account above — if it
+  // fails, the local account (and therefore existing login) is NOT rolled back,
+  // per "existing login must remain unchanged." Failure is reported explicitly,
+  // never silently swallowed.
+  const _sbResult=await _dsCreateSupabaseAuthAndProfile({
+    email:username, password, full_name:fullName, role, department, designation:null, status
+  });
+  if(_sbResult.success){
+    toast('User "'+username+'" created ('+role+') — local account and Supabase Authentication both provisioned');
+  }else if(_sbResult.stage==='connection'){
+    toast('User "'+username+'" created ('+role+') locally. Not connected to Supabase — Authentication account was not created.');
+    console.error('Supabase Auth provisioning skipped (no connection):',_sbResult.error);
+  }else if(_sbResult.stage==='auth'){
+    toast('User "'+username+'" created ('+role+') locally. Supabase Authentication account was NOT created: '+(_sbResult.error&&_sbResult.error.message||'unknown error'));
+    console.error('Supabase Auth signUp failed (Case B — no profile row was attempted):',_sbResult.error);
+  }else if(_sbResult.stage==='profile'){
+    const hint=_sbResult.likelyDuplicate
+      ? ' This looks like the email may already be registered in Supabase Authentication — check the Supabase dashboard before retrying.'
+      : ' A Supabase Authentication account WAS created for this email but the profile record could not be — this needs manual resolution in the Supabase dashboard; retrying user creation with this email may fail.';
+    toast('User "'+username+'" created ('+role+') locally. Supabase Authentication/profile setup INCOMPLETE.'+hint);
+    console.error('Supabase profile creation failed after successful Auth signUp (Case A — orphaned Auth account, uid='+_sbResult.uid+'):',_sbResult.error);
+  }
 }
 function umDeleteUser(username){
   if(username===SUPERADMIN)return;

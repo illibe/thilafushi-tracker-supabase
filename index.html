@@ -4410,13 +4410,98 @@ async function doLogin(){
     return;
   }
 
-  // Existing local authentication (default — used whenever Firebase Auth is not enabled)
+  // Phase 3 (Supabase Authentication — Login): Supabase is now the primary
+  // authentication mechanism, replacing local hash comparison as the
+  // default path. supabase.auth.signInWithPassword() is called with the
+  // username (which is always the user's email, per the existing "User
+  // Name = Email Address convention" used throughout this app).
+  if(submitBtn){submitBtn.disabled=true;submitBtn.textContent='Signing in…';}
+  let _supabaseAuthSucceeded=false;
+  try{
+    const authClient=await _dsGetAuthClient();
+    // TEMP DEBUG (remove after diagnosis): 1. inputs going into signInWithPassword()
+    console.log('[LOGIN DEBUG] Attempting Supabase signInWithPassword with email:',username);
+    const {data:signInData,error:signInErr}=await authClient.auth.signInWithPassword({email:username,password});
+    // TEMP DEBUG (remove after diagnosis): 2. full result of signInWithPassword()
+    console.log('[LOGIN DEBUG] signInWithPassword result — user.id:',signInData&&signInData.user&&signInData.user.id);
+    console.log('[LOGIN DEBUG] signInWithPassword result — user.email:',signInData&&signInData.user&&signInData.user.email);
+    console.log('[LOGIN DEBUG] signInWithPassword result — error (full object):',signInErr);
+    if(signInErr){
+      console.log('[LOGIN DEBUG] EARLY EXIT — signInErr is truthy, throwing to catch block below.');
+      throw signInErr;
+    }
+
+    const users=loadUsers();
+    const user=users.find(u=>u.username.toLowerCase()===username.toLowerCase());
+    // TEMP DEBUG (remove after diagnosis): 3. matching local payload.users record?
+    console.log('[LOGIN DEBUG] Matching local payload.users record found:',!!user,user?{username:user.username,role:user.role}:null);
+
+    // TEMP DEBUG (remove after diagnosis): 4. matching profiles row? — read-only
+    // diagnostic call, result is only logged, never used for any control-flow
+    // decision below, so this cannot change login behavior either way.
+    try{
+      const _authedUid=signInData&&signInData.user&&signInData.user.id;
+      if(_authedUid){
+        const {data:_profileRow,error:_profileErr}=await getUserProfileByAuthId(authClient,_authedUid);
+        console.log('[LOGIN DEBUG] Matching profiles row found:',!!_profileRow,_profileRow||null,'| profiles lookup error:',_profileErr);
+      }else{
+        console.log('[LOGIN DEBUG] Skipped profiles lookup — no authed uid available from signInWithPassword result.');
+      }
+    }catch(_profileLookupEx){
+      console.log('[LOGIN DEBUG] Exception during diagnostic profiles lookup (does not affect login):',_profileLookupEx);
+    }
+
+    if(!user){
+      // Authenticated in Supabase but no matching local record — do not
+      // grant access with no role/permissions to authorize against.
+      console.log('[LOGIN DEBUG] EARLY RETURN — Supabase auth succeeded but no matching local user record. Signing out of Supabase and aborting.');
+      try{await authClient.auth.signOut();}catch(e){}
+      _loginAttempts++;
+      logSystemEvent('login',username,'','Failed');
+      errEl.textContent='Your account is not fully set up in the Tracker. Please contact your administrator.';
+      errEl.style.display='';
+      if(submitBtn){submitBtn.disabled=false;submitBtn.textContent='Sign In';}
+      return;
+    }
+    _supabaseAuthSucceeded=true;
+    console.log('[LOGIN DEBUG] Supabase login path SUCCEEDED for user:',user.username);
+    _loginAttempts=0;
+    logSystemEvent('login',user.username,user.employeeNo||'','Success');
+    setSession({username:user.username,role:user.role,authMode:'supabase'});
+    document.getElementById('login-pass').value='';
+    document.getElementById('login-screen').style.display='none';
+    migrateUserPerms();
+    bootApp();
+  }catch(supabaseErr){
+    // Task Fix (Supabase Lockout Protection — mirrors the existing Firebase
+    // Superadmin Lockout fix above): an account that only exists locally
+    // (the superadmin, seeded by ensureSuperAdmin() and never provisioned
+    // in Supabase Auth; or any account created before Phase 2) must not be
+    // locked out just because Supabase sign-in failed for it. Fall back to
+    // local hash comparison — identical logic to what this branch replaced.
+    // TEMP DEBUG (remove after diagnosis): 6. complete error + stack trace
+    console.log('[LOGIN DEBUG] CAUGHT EXCEPTION in Supabase login branch — full error object:',supabaseErr);
+    console.log('[LOGIN DEBUG] Exception message:',supabaseErr&&supabaseErr.message);
+    console.log('[LOGIN DEBUG] Exception stack trace:',supabaseErr&&supabaseErr.stack);
+    console.warn('Supabase sign-in failed, checking local account as fallback:',supabaseErr);
+  }finally{
+    if(submitBtn){submitBtn.disabled=false;submitBtn.textContent='Sign In';}
+  }
+  if(_supabaseAuthSucceeded)return;
+  // TEMP DEBUG (remove after diagnosis): 5. falling through to local fallback branch
+  console.log('[LOGIN DEBUG] Falling through to local hash-comparison fallback branch.');
+
+  // Existing local authentication (fallback — used when Supabase sign-in
+  // fails, e.g. accounts not yet provisioned in Supabase Auth). Logic
+  // unchanged from before Phase 3.
   const users=loadUsers();
   const user=users.find(u=>u.username.toLowerCase()===username.toLowerCase());
   const hash=await hashPw(password);
 
   // Single clear message for any credential mismatch — matches reference image exactly
   if(!user||hash!==user.hash){
+    // TEMP DEBUG (remove after diagnosis): 5. early return from local fallback branch
+    console.log('[LOGIN DEBUG] EARLY RETURN — local fallback also failed. user found:',!!user,'| hash match:',user?(hash===user.hash):'n/a');
     _loginAttempts++;
     logSystemEvent('login',username,user?user.employeeNo:'','Failed');
     errEl.textContent='Wrong Username or Password';
@@ -4495,6 +4580,11 @@ function doLogout(){
   // Task 5: sign out of Firebase Auth too, if that's how this session was established
   const sess=getSession();
   if(sess&&sess.authMode==='firebase'){firebaseSignOut();}
+  // Phase 3: sign out of Supabase Auth too, if that's how this session was
+  // established — same fire-and-forget pattern as the Firebase branch above.
+  if(sess&&sess.authMode==='supabase'&&window._DS&&window._DS._authClient){
+    window._DS._authClient.auth.signOut().catch(()=>{});
+  }
   clearSession();
   document.getElementById('login-screen').style.display='flex';
   ['user-badge','logout-btn','sb-logout'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
@@ -9437,6 +9527,35 @@ async function updateUserProfile(client, authUuid, updates) {
 }
 
 // ============================================================================
+// ============================================================================
+// Phase 3 (Supabase Authentication — Login)
+// Dedicated, persistent Supabase client for the Tracker's own login/session
+// (signInWithPassword / getSession / signOut on THIS client). Deliberately
+// separate from both:
+//   - window._DS._sbClient (data sync — can be disconnected/reconnected via
+//     Settings; that must never also silently sign the logged-in user out)
+//   - the throwaway client _dsCreateSupabaseAuthAndProfile() creates per
+//     user-creation call (persistSession:false, discarded immediately)
+// Config is read the same way _dsAutoReconnect() already resolves it —
+// this browser's saved cfg.sb, falling back to the single baked-in
+// DEFAULT_SB_CONFIG constant — not a second copy of the URL/key anywhere.
+// persistSession defaults to true here (unlike the user-creation temp
+// client) so a real, ongoing login session can survive a page refresh.
+// ============================================================================
+let _dsAuthClientPromise=null;
+async function _dsGetAuthClient(){
+  if(window._DS._authClient) return window._DS._authClient;
+  if(_dsAuthClientPromise) return _dsAuthClientPromise;
+  _dsAuthClientPromise=(async()=>{
+    const sb=await _dsEnsureSupabaseSdk();
+    const cfg=JSON.parse(localStorage.getItem(DS_CFG_KEY)||'{}');
+    const sbCfg=(cfg.sb&&cfg.sb.url&&cfg.sb.anonKey)?cfg.sb:DEFAULT_SB_CONFIG.sb;
+    window._DS._authClient=sb.createClient(sbCfg.url,sbCfg.anonKey);
+    return window._DS._authClient;
+  })();
+  return _dsAuthClientPromise;
+}
+
 // Phase 2 (Supabase Authentication — User Creation Only)
 // Orchestrates: auth.signUp() -> receive UUID -> insert profiles row.
 // Uses the public client.auth.signUp() API (works with the anon/publishable
@@ -9484,10 +9603,21 @@ async function _dsCreateSupabaseAuthAndProfile(fields){
     auth:{persistSession:false, autoRefreshToken:false, detectSessionInUrl:false}
   });
 
+  // TEMP DEBUG (remove after diagnosis): confirm exactly which API is used.
+  console.log('[CREATE USER DEBUG] API in use: tempClient.auth.signUp() — the public client SDK signup method. NOT auth.admin.createUser() (that requires the service_role key, which cannot exist client-side — see Phase 2/3 architecture notes).');
+  console.log('[CREATE USER DEBUG] Request payload:',{email, password:'(redacted, length='+ (password?password.length:0) +')'});
+  console.log('[CREATE USER DEBUG] email_confirm parameter: NOT APPLICABLE — signUp() has no email_confirm option; that parameter only exists on auth.admin.createUser()/updateUserById(), which this call does not use.');
+
   // STEP 1 + 2: create the Auth account, receive the UUID. Runs entirely on
   // the isolated temp client — the shared client's auth state is never
   // touched by this call.
   const {data:signUpData, error:authErr}=await tempClient.auth.signUp({email,password});
+  // TEMP DEBUG (remove after diagnosis): full Supabase response.
+  console.log('[CREATE USER DEBUG] signUp() response — data:',signUpData);
+  console.log('[CREATE USER DEBUG] signUp() response — user.id:',signUpData&&signUpData.user&&signUpData.user.id);
+  console.log('[CREATE USER DEBUG] signUp() response — user.email_confirmed_at:',signUpData&&signUpData.user&&signUpData.user.email_confirmed_at);
+  console.log('[CREATE USER DEBUG] signUp() response — session (non-null means auto-confirmed/no confirmation required):',signUpData&&signUpData.session);
+  console.log('[CREATE USER DEBUG] signUp() response — error:',authErr);
   if(authErr){
     return {success:false, stage:'auth', error:authErr}; // Case B — profiles never touched
   }
@@ -16417,7 +16547,23 @@ if(_bootRenested||_bootDeduped){
   try{
     const existingSession=getSession();
     if(existingSession){
-      bootApp();
+      // Phase 3: for sessions established via Supabase Authentication,
+      // confirm the underlying Supabase session is still actually valid
+      // before trusting the local session flag — otherwise a
+      // revoked/expired Supabase session would silently restore full app
+      // access based on a stale local flag alone. Local and Firebase-mode
+      // sessions restore exactly as before this change.
+      if(existingSession.authMode==='supabase'){
+        const authClient=await _dsGetAuthClient();
+        const {data:{session:liveSession}}=await authClient.auth.getSession();
+        if(liveSession){
+          bootApp();
+        }else{
+          clearSession();
+        }
+      }else{
+        bootApp();
+      }
     }
   } catch(e){
     console.error('Session restore error:',e);

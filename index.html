@@ -4432,8 +4432,15 @@ async function doLogin(){
     }
 
     const users=loadUsers();
+    // TEMP DEBUG (remove after diagnosis): 1. complete contents of payload.users
+    // (i.e. this browser's localStorage['b2_auth_users']) at the moment of lookup.
+    console.log('[LOGIN DEBUG] Full payload.users on THIS browser (count='+users.length+'):',users.map(u=>({username:u.username,role:u.role})));
+    console.log('[LOGIN DEBUG] Raw localStorage[AUTH_KEY] on THIS browser:',localStorage.getItem(AUTH_KEY));
+    console.log('[LOGIN DEBUG] Data-sync connection state on THIS browser — window._DS.type:',window._DS&&window._DS.type,'| has this browser ever run _dsAutoReconnect()?',!!window._dsAutoReconnected);
+    // TEMP DEBUG (remove after diagnosis): 2. username/email entered by the user.
+    console.log('[LOGIN DEBUG] Username/email entered at login:',JSON.stringify(username));
     const user=users.find(u=>u.username.toLowerCase()===username.toLowerCase());
-    // TEMP DEBUG (remove after diagnosis): 3. matching local payload.users record?
+    // TEMP DEBUG (remove after diagnosis): 3. result of users.find(...)
     console.log('[LOGIN DEBUG] Matching local payload.users record found:',!!user,user?{username:user.username,role:user.role}:null);
 
     // TEMP DEBUG (remove after diagnosis): 4. matching profiles row? — read-only
@@ -4483,6 +4490,15 @@ async function doLogin(){
     console.log('[LOGIN DEBUG] CAUGHT EXCEPTION in Supabase login branch — full error object:',supabaseErr);
     console.log('[LOGIN DEBUG] Exception message:',supabaseErr&&supabaseErr.message);
     console.log('[LOGIN DEBUG] Exception stack trace:',supabaseErr&&supabaseErr.stack);
+    // Explicit detection for the unconfirmed-email case specifically —
+    // Supabase returns this as its own distinct error rather than a generic
+    // credentials failure. Logged clearly so it's never mistaken for a wrong
+    // password again; does not change which branch runs next (still falls
+    // through to the local fallback below either way).
+    const _isUnconfirmedEmail = supabaseErr && (supabaseErr.code==='email_not_confirmed' || /email.*not.*confirm/i.test(supabaseErr.message||''));
+    if(_isUnconfirmedEmail){
+      console.warn('[LOGIN] Supabase rejected sign-in specifically because the email is unconfirmed. This app has no code that requests email confirmation — this is controlled entirely by the Supabase project\'s "Confirm Email" setting (Authentication → Providers → Email, and/or Authentication → Sign In / general settings). Verify that setting is actually saved as disabled on this project.');
+    }
     console.warn('Supabase sign-in failed, checking local account as fallback:',supabaseErr);
   }finally{
     if(submitBtn){submitBtn.disabled=false;submitBtn.textContent='Sign In';}

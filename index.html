@@ -4143,7 +4143,7 @@ async function ensureSuperAdmin(){
   const freshHash=await hashPw('b2admin@4321');
   // Migration: if an older record still uses the legacy 'Ilyas' username, rename it to
   // the new email-based username instead of creating a duplicate superadmin account.
-  const legacyIdx=users.findIndex(u=>u.username==='Ilyas'&&u.role==='superadmin');
+  const legacyIdx=users.findIndex(u=>u.username==='Ilyas7'&&u.role==='superadmin');
   if(legacyIdx>=0&&users[legacyIdx].username!==SUPERADMIN){
     users[legacyIdx].username=SUPERADMIN;
   }
@@ -4151,9 +4151,9 @@ async function ensureSuperAdmin(){
   if(idx>=0){
     users[idx].hash=freshHash;
     users[idx].role='superadmin';
-    users[idx].email='ilyas@port.mv';
+    users[idx].email='ilyas7@port.mv';
   } else {
-    users.unshift({username:SUPERADMIN,hash:freshHash,role:'superadmin',email:'ilyas@port.mv'});
+    users.unshift({username:SUPERADMIN,hash:freshHash,role:'superadmin',email:'ilyas7@port.mv'});
   }
   saveUsers(users);
 }

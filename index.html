@@ -9592,8 +9592,11 @@ async function _dsGetAuthClient(){
 // Case C (both succeed): only then is success:true returned.
 // ============================================================================
 async function _dsCreateSupabaseAuthAndProfile(fields){
+  console.log('[CREATE USER] Entered _dsCreateSupabaseAuthAndProfile()');
   const sharedClient=window._DS&&window._DS._sbClient;
+  console.log('[CREATE USER DEBUG] window._DS.type:',window._DS&&window._DS.type,'| sharedClient present:',!!sharedClient);
   if(!sharedClient){
+    console.log('[CREATE USER DEBUG] EARLY RETURN — no sharedClient (window._DS._sbClient is not set). signUp() will NOT be reached.');
     return {success:false, stage:'connection', error:new Error('Not connected to Supabase')};
   }
   const {email,password,full_name,role,department,designation,status}=fields;
@@ -9614,20 +9617,36 @@ async function _dsCreateSupabaseAuthAndProfile(fields){
   // function returns. It cannot affect the shared client's state, the
   // ongoing b2_tracker_data realtime sync, or any future administrator
   // Supabase Auth session on the shared client.
-  const sb=await _dsEnsureSupabaseSdk();
-  const tempClient=sb.createClient(sharedClient.supabaseUrl, sharedClient.supabaseKey, {
-    auth:{persistSession:false, autoRefreshToken:false, detectSessionInUrl:false}
-  });
+  // TEMP DEBUG (diagnostic try/catch): sb.createClient() / signUp() currently
+  // have no surrounding error handling — any thrown exception here (e.g. the
+  // Supabase SDK failing to load, or createClient() rejecting malformed
+  // args) would otherwise be an UNCAUGHT rejection, silently stopping
+  // umCreateUser() right after the local account is created, with no toast
+  // and no console output at all. This catch exists purely so that case is
+  // visible instead of silent — it does not change the success path.
+  let sb, tempClient, signUpData, authErr;
+  try{
+    sb=await _dsEnsureSupabaseSdk();
+    tempClient=sb.createClient(sharedClient.supabaseUrl, sharedClient.supabaseKey, {
+      auth:{persistSession:false, autoRefreshToken:false, detectSessionInUrl:false}
+    });
 
-  // TEMP DEBUG (remove after diagnosis): confirm exactly which API is used.
-  console.log('[CREATE USER DEBUG] API in use: tempClient.auth.signUp() — the public client SDK signup method. NOT auth.admin.createUser() (that requires the service_role key, which cannot exist client-side — see Phase 2/3 architecture notes).');
-  console.log('[CREATE USER DEBUG] Request payload:',{email, password:'(redacted, length='+ (password?password.length:0) +')'});
-  console.log('[CREATE USER DEBUG] email_confirm parameter: NOT APPLICABLE — signUp() has no email_confirm option; that parameter only exists on auth.admin.createUser()/updateUserById(), which this call does not use.');
+    // TEMP DEBUG (remove after diagnosis): confirm exactly which API is used.
+    console.log('[CREATE USER DEBUG] API in use: tempClient.auth.signUp() — the public client SDK signup method. NOT auth.admin.createUser() (that requires the service_role key, which cannot exist client-side — see Phase 2/3 architecture notes).');
+    console.log('[CREATE USER DEBUG] Request payload:',{email, password:'(redacted, length='+ (password?password.length:0) +')'});
+    console.log('[CREATE USER DEBUG] email_confirm parameter: NOT APPLICABLE — signUp() has no email_confirm option; that parameter only exists on auth.admin.createUser()/updateUserById(), which this call does not use.');
 
-  // STEP 1 + 2: create the Auth account, receive the UUID. Runs entirely on
-  // the isolated temp client — the shared client's auth state is never
-  // touched by this call.
-  const {data:signUpData, error:authErr}=await tempClient.auth.signUp({email,password});
+    // STEP 1 + 2: create the Auth account, receive the UUID. Runs entirely on
+    // the isolated temp client — the shared client's auth state is never
+    // touched by this call.
+    console.log('[CREATE USER] Calling signUp()');
+    ({data:signUpData, error:authErr}=await tempClient.auth.signUp({email,password}));
+    console.log('[CREATE USER] signUp response',signUpData);
+    console.log('[CREATE USER] signUp error',authErr);
+  }catch(_ex){
+    console.log('[CREATE USER DEBUG] EXCEPTION thrown during temp client creation or signUp() — this was previously an UNCAUGHT rejection:',_ex);
+    return {success:false, stage:'auth', error:_ex};
+  }
   // TEMP DEBUG (remove after diagnosis): full Supabase response.
   console.log('[CREATE USER DEBUG] signUp() response — data:',signUpData);
   console.log('[CREATE USER DEBUG] signUp() response — user.id:',signUpData&&signUpData.user&&signUpData.user.id);
@@ -10523,6 +10542,7 @@ async function _umCreateLocalAccount(users,fullName,username,employeeNo,departme
   populateLoginDropdown();
 }
 async function umCreateUser(){
+  console.log('[CREATE USER] Entered umCreateUser()');
   const fullName=document.getElementById('um-new-fullname').value.trim();
   const username=document.getElementById('um-new-username').value.trim().toLowerCase();
   const employeeNo=document.getElementById('um-new-empno').value.trim();

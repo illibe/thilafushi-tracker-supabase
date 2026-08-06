@@ -9647,6 +9647,7 @@ async function _dsCreateSupabaseAuthAndProfile(fields){
       auth:{persistSession:false, autoRefreshToken:false, detectSessionInUrl:false}
     });
     ({data:signUpData, error:authErr}=await tempClient.auth.signUp({email,password}));
+    console.log({email, signUpData, authErr});
   }catch(_ex){
     return {success:false, stage:'auth', error:_ex};
   }

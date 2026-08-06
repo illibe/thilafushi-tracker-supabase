@@ -9646,6 +9646,10 @@ async function _dsCreateSupabaseAuthAndProfile(fields){
     tempClient=sb.createClient(sbCfg.url, sbCfg.anonKey, {
       auth:{persistSession:false, autoRefreshToken:false, detectSessionInUrl:false}
     });
+    console.log('email = >'+email+'<');
+    console.log('email.length =',email.length);
+    console.log('password.length =',password?password.length:0);
+    console.log('options object =',undefined);
     ({data:signUpData, error:authErr}=await tempClient.auth.signUp({email,password}));
     console.log({email, signUpData, authErr});
   }catch(_ex){

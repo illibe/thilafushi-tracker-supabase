@@ -4431,6 +4431,17 @@ async function doLogin(){
       throw signInErr;
     }
 
+    // Fix (race condition, complete): if the page-load data-source connection
+    // is still in flight, wait for THIS SAME attempt (started at
+    // initialization, see window._dsInitPromise) rather than reading
+    // payload.users before it's had a chance to sync. _dsAutoReconnect()
+    // internally catches all its own errors and always resolves (never
+    // rejects), so this cannot itself fail login or hang indefinitely — no
+    // timeout is needed because there is nothing to time out against. If
+    // it already finished before login was attempted, this resolves
+    // immediately.
+    if(window._dsInitPromise){await window._dsInitPromise;}
+
     const users=loadUsers();
     // TEMP DEBUG (remove after diagnosis): 1. complete contents of payload.users
     // (i.e. this browser's localStorage['b2_auth_users']) at the moment of lookup.
@@ -4506,6 +4517,11 @@ async function doLogin(){
   if(_supabaseAuthSucceeded)return;
   // TEMP DEBUG (remove after diagnosis): 5. falling through to local fallback branch
   console.log('[LOGIN DEBUG] Falling through to local hash-comparison fallback branch.');
+
+  // Fix (race condition, complete): same reasoning as the Supabase branch
+  // above — wait for the same in-flight startup connection, if any, before
+  // reading payload.users here too.
+  if(window._dsInitPromise){await window._dsInitPromise;}
 
   // Existing local authentication (fallback — used when Supabase sign-in
   // fails, e.g. accounts not yet provisioned in Supabase Auth). Logic
@@ -16559,6 +16575,19 @@ if(_bootRenested||_bootDeduped){
   try{ migrateToMasterFeatures(); }catch(e){ console.error('migrateToMasterFeatures error:',e); }
   try{ initBlId(); }catch(e){ console.error('initBlId error:',e); }
   try{ populateLoginDropdown(); }catch(e){ console.error('populateLoginDropdown error:',e); }
+  // Fix (Startup DS-mode / race condition): start the data-source
+  // auto-reconnect immediately at page initialization, not gated behind
+  // bootApp()/login. window._dsInitPromise exposes the in-flight (or
+  // already-settled) connection attempt so other code — specifically
+  // doLogin(), below — can await the *same* attempt rather than starting a
+  // second one or polling for it. Fire-and-forget here (not awaited),
+  // exactly like every other call site of _dsAutoReconnect() in this file,
+  // so it doesn't block the login screen from appearing. bootApp()'s own
+  // "if(!window._dsAutoReconnected)" line further down is left completely
+  // unchanged — since _dsAutoReconnected is now already true by the time
+  // bootApp() runs, that line becomes a harmless no-op there, guaranteeing
+  // this is still only ever started once.
+  if(!window._dsAutoReconnected){window._dsAutoReconnected=true;window._dsInitPromise=_dsAutoReconnect();}
   // Change 3: restore session on refresh — only clear on explicit logout.
   // Always attempted, regardless of the outcome of the steps above.
   try{

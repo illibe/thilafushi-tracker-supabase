@@ -3365,7 +3365,7 @@ const MOM_KEY         = 'b2_meeting_minutes_v1'; // NEW: Meeting Minutes (Task 2
 const BACKLOG_KEY     = 'b2_backlog_v1';           // legacy, kept for read compat
 const FEATURES_KEY    = 'b2_features_master_v1';   // NEW: master feature table
 const MTG_FEAT_KEY    = 'b2_meeting_features_v1';  // NEW: bridge table
-const SUPERADMIN      = 'ilyas7@port.mv'; // User Name = Email Address convention (Firebase Auth readiness)
+const SUPERADMIN      = 'ilyax7@port.mv'; // User Name = Email Address convention (Firebase Auth readiness)
 
 // ══════════════════════════════════════════════════════
 // MASTER FEATURES TABLE
@@ -4143,17 +4143,29 @@ async function ensureSuperAdmin(){
   const freshHash=await hashPw('b2admin@4321');
   // Migration: if an older record still uses the legacy 'Ilyas' username, rename it to
   // the new email-based username instead of creating a duplicate superadmin account.
-  const legacyIdx=users.findIndex(u=>u.username==='Ilyas7'&&u.role==='superadmin');
+  const legacyIdx=users.findIndex(u=>u.username==='Ilyas'&&u.role==='superadmin');
   if(legacyIdx>=0&&users[legacyIdx].username!==SUPERADMIN){
     users[legacyIdx].username=SUPERADMIN;
+  }
+  // Task Fix (Superadmin email change, testing only): migrate any existing
+  // local record still using the prior superadmin email so it becomes the
+  // new SUPERADMIN value in place, instead of leaving that old record
+  // orphaned and creating a duplicate below. Same rename-in-place pattern
+  // as the 'Ilyas' legacy migration above. Only username/email are
+  // touched here — hash is set from freshHash regardless, exactly as
+  // before this change; nothing about password generation is altered.
+  const priorEmailIdx=users.findIndex(u=>u.username==='ilyas@port.mv'&&u.role==='superadmin');
+  if(priorEmailIdx>=0&&users[priorEmailIdx].username!==SUPERADMIN){
+    users[priorEmailIdx].username=SUPERADMIN;
+    users[priorEmailIdx].email=SUPERADMIN;
   }
   const idx=users.findIndex(u=>u.username===SUPERADMIN);
   if(idx>=0){
     users[idx].hash=freshHash;
     users[idx].role='superadmin';
-    users[idx].email='ilyas7@port.mv';
+    users[idx].email=SUPERADMIN;
   } else {
-    users.unshift({username:SUPERADMIN,hash:freshHash,role:'superadmin',email:'ilyas7@port.mv'});
+    users.unshift({username:SUPERADMIN,hash:freshHash,role:'superadmin',email:SUPERADMIN});
   }
   saveUsers(users);
 }

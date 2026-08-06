@@ -9479,6 +9479,17 @@ async function _dsSupabaseConnectCore(url,anonKey,opts){
 // using this browser's own saved cfg.sb if present, otherwise falling back
 // to the baked-in DEFAULT_SB_CONFIG (same fallback pattern DEFAULT_FB_CONFIG
 // used for Firebase).
+// Single source of truth for resolving this browser's Supabase URL/anon
+// key: this browser's saved cfg.sb if present, otherwise the one baked-in
+// DEFAULT_SB_CONFIG constant. Synchronous — no network call, nothing to
+// await, nothing to race against. Used by realtime sync (_dsAutoReconnect),
+// the dedicated login auth client (_dsGetAuthClient), and Create User
+// (_dsCreateSupabaseAuthAndProfile) — the only place this resolution logic
+// is written, so all three always agree on the same URL/key.
+function _dsResolveSbConfig(){
+  const cfg=JSON.parse(localStorage.getItem(DS_CFG_KEY)||'{}');
+  return (cfg.sb&&cfg.sb.url&&cfg.sb.anonKey)?cfg.sb:DEFAULT_SB_CONFIG.sb;
+}
 async function _dsAutoReconnect(){
   try{
     const cfg=JSON.parse(localStorage.getItem(DS_CFG_KEY)||'{}');
@@ -9488,10 +9499,9 @@ async function _dsAutoReconnect(){
       return;
     }
 
-    // Supabase: default provider. Use this browser's own saved config if it
-    // has one; otherwise fall back to the baked-in DEFAULT_SB_CONFIG so a
-    // fresh device still gets Supabase automatically.
-    const sbCfg=(cfg.sb&&cfg.sb.url&&cfg.sb.anonKey)?cfg.sb:DEFAULT_SB_CONFIG.sb;
+    // Supabase: default provider. Config resolution delegated to
+    // _dsResolveSbConfig() — the single shared resolver (see above).
+    const sbCfg=_dsResolveSbConfig();
     if(sbCfg&&sbCfg.url&&sbCfg.anonKey){
       await _dsSupabaseConnectCore(sbCfg.url,sbCfg.anonKey,{silent:true});
     }
@@ -9564,8 +9574,7 @@ async function _dsGetAuthClient(){
   if(_dsAuthClientPromise) return _dsAuthClientPromise;
   _dsAuthClientPromise=(async()=>{
     const sb=await _dsEnsureSupabaseSdk();
-    const cfg=JSON.parse(localStorage.getItem(DS_CFG_KEY)||'{}');
-    const sbCfg=(cfg.sb&&cfg.sb.url&&cfg.sb.anonKey)?cfg.sb:DEFAULT_SB_CONFIG.sb;
+    const sbCfg=_dsResolveSbConfig();
     window._DS._authClient=sb.createClient(sbCfg.url,sbCfg.anonKey);
     return window._DS._authClient;
   })();
@@ -9592,67 +9601,39 @@ async function _dsGetAuthClient(){
 // Case C (both succeed): only then is success:true returned.
 // ============================================================================
 async function _dsCreateSupabaseAuthAndProfile(fields){
-  console.log('[CREATE USER] Entered _dsCreateSupabaseAuthAndProfile()');
-  const sharedClient=window._DS&&window._DS._sbClient;
-  console.log('[CREATE USER DEBUG] window._DS.type:',window._DS&&window._DS.type,'| sharedClient present:',!!sharedClient);
-  if(!sharedClient){
-    console.log('[CREATE USER DEBUG] EARLY RETURN — no sharedClient (window._DS._sbClient is not set). signUp() will NOT be reached.');
-    return {success:false, stage:'connection', error:new Error('Not connected to Supabase')};
-  }
   const {email,password,full_name,role,department,designation,status}=fields;
 
-  // Isolated temporary client for this operation only. Config is read directly
-  // off the already-connected shared client's own public properties
-  // (supabaseUrl/supabaseKey — documented public fields of SupabaseClient in
-  // supabase-js v2), NOT re-entered from DEFAULT_SB_CONFIG or cfg.sb. This
-  // keeps a single source of truth: whatever URL/key the shared client is
-  // actually using (per-device saved config or the DEFAULT_SB_CONFIG
-  // fallback — either way) is exactly what this temporary client uses too.
-  //
-  // persistSession:false / autoRefreshToken:false / detectSessionInUrl:false
+  // Fix (Create User race condition): config is resolved deterministically
+  // via _dsResolveSbConfig() — the same single source of truth used by
+  // realtime sync (_dsAutoReconnect) and login (_dsGetAuthClient) — rather
+  // than being read off window._DS._sbClient. That client is only assigned
+  // after _dsSupabaseConnectCore()'s own network round-trip completes, and
+  // is never awaited by bootApp(), so Create User previously depended on
+  // background connection timing it had no real need to depend on. Nothing
+  // here reads or waits on window._DS._sbClient at all anymore.
+  const sbCfg=_dsResolveSbConfig();
+  if(!sbCfg||!sbCfg.url||!sbCfg.anonKey){
+    return {success:false, stage:'connection', error:new Error('No Supabase configuration available (cfg.sb / DEFAULT_SB_CONFIG.sb both missing).')};
+  }
+
+  // Isolated temporary client for this operation only — same isolation as
+  // before: persistSession:false / autoRefreshToken:false / detectSessionInUrl:false
   // mean this client never touches localStorage and never behaves as an
-  // ongoing session holder — it exists only for the duration of this
-  // function call. It has no realtime channel, no relationship to
-  // window._DS._sbClient, and is discarded (goes out of scope) when this
-  // function returns. It cannot affect the shared client's state, the
-  // ongoing b2_tracker_data realtime sync, or any future administrator
-  // Supabase Auth session on the shared client.
-  // TEMP DEBUG (diagnostic try/catch): sb.createClient() / signUp() currently
-  // have no surrounding error handling — any thrown exception here (e.g. the
-  // Supabase SDK failing to load, or createClient() rejecting malformed
-  // args) would otherwise be an UNCAUGHT rejection, silently stopping
-  // umCreateUser() right after the local account is created, with no toast
-  // and no console output at all. This catch exists purely so that case is
-  // visible instead of silent — it does not change the success path.
+  // ongoing session holder. It has no realtime channel, no relationship to
+  // window._DS._sbClient or window._DS._authClient, and is discarded (goes
+  // out of scope) when this function returns. It cannot affect the shared
+  // data-sync client's state, the ongoing b2_tracker_data realtime sync, or
+  // any administrator Supabase Auth session.
   let sb, tempClient, signUpData, authErr;
   try{
     sb=await _dsEnsureSupabaseSdk();
-    tempClient=sb.createClient(sharedClient.supabaseUrl, sharedClient.supabaseKey, {
+    tempClient=sb.createClient(sbCfg.url, sbCfg.anonKey, {
       auth:{persistSession:false, autoRefreshToken:false, detectSessionInUrl:false}
     });
-
-    // TEMP DEBUG (remove after diagnosis): confirm exactly which API is used.
-    console.log('[CREATE USER DEBUG] API in use: tempClient.auth.signUp() — the public client SDK signup method. NOT auth.admin.createUser() (that requires the service_role key, which cannot exist client-side — see Phase 2/3 architecture notes).');
-    console.log('[CREATE USER DEBUG] Request payload:',{email, password:'(redacted, length='+ (password?password.length:0) +')'});
-    console.log('[CREATE USER DEBUG] email_confirm parameter: NOT APPLICABLE — signUp() has no email_confirm option; that parameter only exists on auth.admin.createUser()/updateUserById(), which this call does not use.');
-
-    // STEP 1 + 2: create the Auth account, receive the UUID. Runs entirely on
-    // the isolated temp client — the shared client's auth state is never
-    // touched by this call.
-    console.log('[CREATE USER] Calling signUp()');
     ({data:signUpData, error:authErr}=await tempClient.auth.signUp({email,password}));
-    console.log('[CREATE USER] signUp response',signUpData);
-    console.log('[CREATE USER] signUp error',authErr);
   }catch(_ex){
-    console.log('[CREATE USER DEBUG] EXCEPTION thrown during temp client creation or signUp() — this was previously an UNCAUGHT rejection:',_ex);
     return {success:false, stage:'auth', error:_ex};
   }
-  // TEMP DEBUG (remove after diagnosis): full Supabase response.
-  console.log('[CREATE USER DEBUG] signUp() response — data:',signUpData);
-  console.log('[CREATE USER DEBUG] signUp() response — user.id:',signUpData&&signUpData.user&&signUpData.user.id);
-  console.log('[CREATE USER DEBUG] signUp() response — user.email_confirmed_at:',signUpData&&signUpData.user&&signUpData.user.email_confirmed_at);
-  console.log('[CREATE USER DEBUG] signUp() response — session (non-null means auto-confirmed/no confirmation required):',signUpData&&signUpData.session);
-  console.log('[CREATE USER DEBUG] signUp() response — error:',authErr);
   if(authErr){
     return {success:false, stage:'auth', error:authErr}; // Case B — profiles never touched
   }
@@ -9662,9 +9643,9 @@ async function _dsCreateSupabaseAuthAndProfile(fields){
   }
 
   // STEP 3: create the matching profiles row (id MUST equal the Auth UUID).
-  // Must run on tempClient, not sharedClient: the profiles INSERT policy
-  // requires auth.uid() = id, which only holds for the session tempClient
-  // is currently holding (the new user's own, just-created session).
+  // Must run on tempClient: the profiles INSERT policy requires
+  // auth.uid() = id, which only holds for the session tempClient is
+  // currently holding (the new user's own, just-created session).
   let {error:profileErr}=await createUserProfile(tempClient,{id:uid,email,full_name,role,department,designation,status});
   if(profileErr){
     // One retry for transient errors before treating this as Case A.

@@ -952,11 +952,10 @@ body.readonly .icon-btn.tl-expand-details-btn{pointer-events:auto;opacity:1;}
 
 <!-- STATS BAR (inside page-content, right of sidebar) -->
 <div class="stats-bar" id="stats-bar">
-  <div class="stat-item"><span class="stat-label">Program Progress</span><span class="stat-value" id="stat-overall">0<span>%</span></span></div>
-  <div class="stat-item"><span class="stat-label">Programs</span><span class="stat-value" id="stat-modules">0</span></div>
-  <div class="stat-item"><span class="stat-label">Active Tasks</span><span class="stat-value" id="stat-tasks">0</span></div>
-  <div class="stat-item"><span class="stat-label">Completed Tasks</span><span class="stat-value" id="stat-features" style="font-size:18px">0 / 0</span></div>
-  <div class="stat-item"><span class="stat-label">Completion Rate</span><span class="stat-value" id="stat-done">0<span>%</span></span></div>
+  <div class="stat-item"><span class="stat-label">Program Progress</span><span class="stat-value" id="stat-overall" style="font-size:18px">0 / 0</span></div>
+  <div class="stat-item"><span class="stat-label">Project Progress</span><span class="stat-value" id="stat-tasks" style="font-size:18px">0 / 0</span></div>
+  <div class="stat-item"><span class="stat-label">Task Progress</span><span class="stat-value" id="stat-features" style="font-size:18px">0 / 0</span></div>
+  <div class="stat-item"><span class="stat-label">Meeting Task</span><span class="stat-value" id="stat-done" style="font-size:18px">0 / 0</span></div>
   <div class="stat-item clickable" onclick="showPage('milestones')" title="View Milestones" id="stat-milestone-item">
     <span class="stat-label">🎯 Current Milestone</span>
     <span class="stat-value" id="stat-milestone-heading" style="font-size:12px;font-weight:700;color:var(--text);line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px">No Active Milestone</span>
@@ -1123,14 +1122,15 @@ body.readonly .icon-btn.tl-expand-details-btn{pointer-events:auto;opacity:1;}
             <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:120px">Meeting Number</th>
             <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:120px">Meeting Type</th>
             <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:110px">Chairperson</th>
-            <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border)">Item</th>
+            <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border)">Agenda Item</th>
+            <th style="padding:9px 10px;text-align:center;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:100px">Total Tasks</th>
             <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:120px">Date/Time</th>
             <th style="padding:9px 10px;text-align:center;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:90px">Attendance</th>
             <th style="padding:9px 10px;text-align:center;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:80px">View PDF</th>
             <th style="padding:9px 10px;text-align:center;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:70px">Action</th>
           </tr>
         </thead>
-        <tbody id="mom-tbody"><tr><td colspan="9" style="padding:20px;text-align:center;color:var(--muted2)">No meetings recorded yet.</td></tr></tbody>
+        <tbody id="mom-tbody"><tr><td colspan="10" style="padding:20px;text-align:center;color:var(--muted2)">No meetings recorded yet.</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -1324,7 +1324,7 @@ body.readonly .icon-btn.tl-expand-details-btn{pointer-events:auto;opacity:1;}
     <h2 style="font-family:var(--font-head);font-size:20px;font-weight:800;margin:0 0 16px">My Task</h2>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
       <span style="font-size:13px;color:var(--muted);flex-shrink:0">Search :</span>
-      <input type="text" id="mytask-search" oninput="renderMyTaskTable()" placeholder="Search tasks…"
+      <input type="text" id="mytask-search" oninput="renderMyTaskTable()" placeholder="Search tasks, employee no., member…"
         style="width:260px;flex-shrink:0;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:var(--font-body);font-size:13px;outline:none">
       <span style="font-size:13px;color:var(--muted);flex-shrink:0;margin-left:6px">Status :</span>
       <select id="mytask-filter-status" onchange="renderMyTaskTable()"
@@ -1334,6 +1334,16 @@ body.readonly .icon-btn.tl-expand-details-btn{pointer-events:auto;opacity:1;}
         <option value="inprogress">In Progress</option>
         <option value="completed">Completed</option>
       </select>
+      <!-- Assigned Person filter: only shown to users with the "View All Tasks"
+           role grant (superadmin, or canViewAllTasks) — see initMyTaskApFilter().
+           Hidden for everyone else since their task list is already scoped to
+           just themselves, so this filter would have nothing else to offer. -->
+      <div id="mytask-ap-wrap" style="display:none;position:relative;flex-shrink:0;margin-left:6px">
+        <span style="font-size:13px;color:var(--muted);margin-right:6px">Assigned Person :</span>
+        <button id="mytask-ap-btn" type="button" onclick="toggleMyTaskApDropdown()"
+          style="padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:var(--font-body);font-size:13px;cursor:pointer;min-width:140px;text-align:left">All</button>
+        <div id="mytask-ap-dropdown" style="display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:20;min-width:220px;max-height:280px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.25)"></div>
+      </div>
       <div style="flex:1"></div>
       <span id="mytask-count" style="font-size:11px;color:var(--muted)"></span>
     </div>
@@ -2675,7 +2685,13 @@ create policy "public read/write (testing)" on b2_tracker_data
 <div class="confirm-box" id="confirm-box">
   <div class="confirm-inner">
     <h3 id="confirm-title">Delete Item</h3><p id="confirm-msg">Are you sure?</p>
-    <div class="confirm-btns"><button class="btn btn-ghost" onclick="closeConfirm()">Cancel</button><button class="btn btn-danger" onclick="confirmDelete()">Yes, Delete</button></div>
+    <div id="confirm-ack-wrap" style="display:none;margin:10px 0;text-align:left">
+      <label style="display:flex;align-items:flex-start;gap:8px;font-size:12px;color:var(--text);cursor:pointer">
+        <input type="checkbox" id="confirm-ack-cb" onchange="document.getElementById('confirm-yes-btn').disabled=!this.checked" style="margin-top:2px">
+        <span>I understand this will permanently delete completed historical data and cannot be undone.</span>
+      </label>
+    </div>
+    <div class="confirm-btns"><button class="btn btn-ghost" onclick="closeConfirm()">Cancel</button><button id="confirm-yes-btn" class="btn btn-danger" onclick="confirmDelete()">Yes, Delete</button></div>
   </div>
 </div>
 
@@ -2933,7 +2949,7 @@ create policy "public read/write (testing)" on b2_tracker_data
           </div>
         </div>
         <div class="field" style="flex:1;min-width:220px"><label>Add Agenda item</label><input type="text" id="mom-agenda-input" placeholder="Type an agenda item…"></div>
-        <button class="btn btn-ghost btn-sm" onclick="openMomProjectPicker()" style="flex-shrink:0">Brows</button>
+        <button class="btn btn-ghost btn-sm" onclick="openMomProjectPicker()" style="flex-shrink:0">Browse</button>
         <button class="btn btn-primary btn-sm" onclick="addMomAgendaItem()" style="flex-shrink:0">Add</button>
         <button class="btn btn-ghost btn-sm" onclick="addMomItemRow()" style="flex-shrink:0">Add New</button>
       </div>
@@ -2944,9 +2960,10 @@ create policy "public read/write (testing)" on b2_tracker_data
           <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:960px;table-layout:fixed">
             <colgroup>
               <col style="width:32px">
-              <col style="width:130px">
-              <col style="width:230px">
-              <col style="width:230px">
+              <col style="width:120px">
+              <col style="width:200px">
+              <col style="width:180px">
+              <col style="width:180px">
               <col style="width:120px">
               <col style="width:130px">
               <col style="width:40px">
@@ -2954,9 +2971,10 @@ create policy "public read/write (testing)" on b2_tracker_data
             <thead>
               <tr style="background:var(--surface2);position:sticky;top:0;z-index:1">
                 <th style="padding:8px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border)">#</th>
-                <th style="padding:8px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border)">Item</th>
-                <th style="padding:8px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border)">Discission</th>
-                <th style="padding:8px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border)">Decision / Task</th>
+                <th style="padding:8px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border)">Agenda Item</th>
+                <th style="padding:8px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border)">Item Details</th>
+                <th style="padding:8px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border)">Conclusion</th>
+                <th style="padding:8px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border)">Meeting Task</th>
                 <th style="padding:8px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border)">Assigned To</th>
                 <th style="padding:8px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border)">Due Date</th>
                 <th style="padding:8px 10px;text-align:center;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border)">Action</th>
@@ -2975,6 +2993,7 @@ create policy "public read/write (testing)" on b2_tracker_data
         <span id="mom-pdf-filename" style="font-size:12px;color:var(--muted2)"></span>
       </div>
       <button class="btn btn-ghost" onclick="closeMomModal()">Cancel</button>
+      <button id="mom-delete-btn" class="btn btn-ghost" style="display:none;color:var(--red);border-color:var(--red)" onclick="momModalDelete()">Delete Meeting</button>
       <button class="btn btn-primary" onclick="saveMomMeeting()">Update</button>
     </div>
   </div>
@@ -3002,6 +3021,17 @@ create policy "public read/write (testing)" on b2_tracker_data
   </div>
 </div>
 
+<!-- MEETING MINUTES: PROJECT ACTIVITY SELECTION CONFIRM MODAL -->
+<div class="modal-overlay" id="mom-picker-confirm-modal" onclick="closeMomPickerConfirm(event)" style="z-index:1160">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-head"><div><h2>Confirm Activity</h2><p>Review the full hierarchy before adding it as an agenda item</p></div><button class="modal-close" onclick="closeMomPickerConfirm()">✕</button></div>
+    <div class="modal-body">
+      <div id="mom-picker-confirm-hierarchy" style="font-size:13px;line-height:2;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 14px"></div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-ghost" onclick="closeMomPickerConfirm()">Cancel</button><button class="btn btn-primary" onclick="confirmMomPickerPick()">Add to Meeting</button></div>
+  </div>
+</div>
+
 <!-- MEETING MANAGEMENT: READ-ONLY ATTENDANCE VIEW MODAL (Task 3) -->
 <div class="modal-overlay" id="mom-attendance-view-modal" onclick="closeMomAttendanceView(event)" style="z-index:1150">
   <div class="modal" style="max-width:420px">
@@ -3018,7 +3048,7 @@ create policy "public read/write (testing)" on b2_tracker_data
     <div class="modal-body" id="mom-view-body" style="font-size:13px"></div>
     <div class="modal-foot">
       <button class="btn btn-ghost" onclick="closeMomViewModal()">Close</button>
-      <button class="btn btn-primary" onclick="closeMomViewModal();momEditIfAllowed(_momViewId)">Edit</button>
+      <button id="mom-view-edit-btn" class="btn btn-primary" onclick="closeMomViewModal();momEditIfAllowed(_momViewId)">Edit</button>
     </div>
   </div>
 </div>
@@ -3543,7 +3573,10 @@ const DEFAULT_ADMIN_PERMS = {
   canCreateTeams:true, canEditTeam:true, canDeleteTeam:false,
 
   // ── Roadmap Management ───────────────────────────────
-  canCreateRoadmap:true, canEditRoadmap:true, canDeleteRoadmap:false
+  canCreateRoadmap:true, canEditRoadmap:true, canDeleteRoadmap:false,
+
+  // ── My Task Module (visibility) ──────────────────────
+  canViewAllTasks:false // off by default — everyone starts scoped to their own tasks
 };
 const DEFAULT_GUEST_PERMS = {
   modules:{
@@ -3718,6 +3751,12 @@ function renderPermMatrix(user){
     });
   }
 
+  // My Task — Visibility (shared: available to Admin and Guest roles alike,
+  // unlike the granular toggles below which are Admin-only, since regular
+  // team members are exactly who this "see everyone's tasks" grant is for).
+  html+=sectionHead('🗂️ My Task — Visibility');
+  html+=toggle('canViewAllTasks',pv('canViewAllTasks',d.canViewAllTasks),'View All Tasks','Can see every team member\'s Meeting Tasks (not just their own) and use the Assigned Person filter. Off by default — the user still sees only their own tasks.');
+
   if(isAdmin){
     // ── Feature Module ──────────────────────────────────────────────────
     html+=sectionHead('📋 Feature Module','Add / Edit / Delete / View');
@@ -3814,6 +3853,9 @@ function savePermissions(){
     if(view||edit||del)_programPermissions[prog.id]={view,edit,delete:del};
   });
   user.permissions.programPermissions=_programPermissions;
+  // My Task — Visibility: shared across Admin and Guest, saved unconditionally
+  // (unlike the granular canX flags below, which only apply to Admin users).
+  user.permissions.canViewAllTasks=checked('canViewAllTasks');
   if(isAdmin){
     Object.assign(user.permissions,{
       // Feature Module
@@ -4196,6 +4238,7 @@ function canMeetingEdit(){const r=currentRole();if(r==='superadmin')return true;
 function canAddRemarks(){const r=currentRole();if(r==='superadmin')return true;return hasPerm('canAddRemarks');}
 function canEditRemarks(){const r=currentRole();if(r==='superadmin')return true;return hasPerm('canEditRemarks');}
 function canRemoveRemarks(){const r=currentRole();if(r==='superadmin')return true;return hasPerm('canRemoveRemarks');}
+function canViewAllTasks(){const r=currentRole();if(r==='superadmin')return true;return hasPerm('canViewAllTasks');}
 function canConcludeMeetingPerm(){const r=currentRole();if(r==='superadmin')return true;return hasPerm('canConcludeMeeting');}
 function canEditTeamMember(){const r=currentRole();if(r==='superadmin')return true;return hasPerm('canEditTeam');}
 function canDeleteTeamMember(){const r=currentRole();if(r==='superadmin')return true;return hasPerm('canDeleteTeam');}
@@ -5641,6 +5684,12 @@ function resetModulesAndFeatures(){
   window._resetPending=true;
   document.getElementById('confirm-title').textContent='Delete All Data';
   document.getElementById('confirm-msg').textContent='Delete ALL modules, submodules, tasks and features? This cannot be undone.';
+  // Shared confirm-box: reset any state left over from the Deletion
+  // Validation Flow (askDelete), which can hide/disable this button.
+  const yesBtn=document.getElementById('confirm-yes-btn');
+  if(yesBtn){yesBtn.style.display='';yesBtn.disabled=false;}
+  const ackWrap=document.getElementById('confirm-ack-wrap');
+  if(ackWrap)ackWrap.style.display='none';
   document.getElementById('confirm-box').classList.add('open');
 }
 
@@ -8558,6 +8607,14 @@ const DEFAULT_SB_CONFIG={
   }
 };
 
+// Single switch for Testing vs Production Supabase table. Change APP_ENV only —
+// every real database operation reads TABLE_NAME derived from it below.
+const APP_ENV = 'PROD'; // TEST or PROD
+const TABLE_NAME =
+    APP_ENV === 'TEST'
+        ? 'b2_tracker_data_Testing'
+        : 'b2_tracker_data';
+
 window._DS={
   type:'local',           // active type: local | file | sheet | firebase | supabase
   _fbApp:null,            // Firebase app instance
@@ -8592,7 +8649,7 @@ window._DS={
         console.error('Supabase save skipped: not connected.');
         toast('⚠ Not connected to Supabase — changes are kept locally until reconnected');
       }else{
-        this._sbClient.from('b2_tracker_data').upsert({id:'main',payload:this._serialize(appData),updated_at:new Date().toISOString()})
+        this._sbClient.from(TABLE_NAME).upsert({id:'main',payload:this._serialize(appData),updated_at:new Date().toISOString()})
           .then(({error})=>{
             if(error){
               console.error('Supabase save error:',error);
@@ -9325,7 +9382,7 @@ async function dsSupabaseTestConnection(){
     const sb=await _dsEnsureSupabaseSdk();
     const testClient=sb.createClient(url,anonKey);
     const {error}=await Promise.race([
-      testClient.from('b2_tracker_data').select('id').limit(1),
+      testClient.from(TABLE_NAME).select('id').limit(1),
       new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),10000))
     ]);
     if(error&&error.code!=='PGRST205'&&!/does not exist|not found/i.test(error.message||'')){
@@ -9379,11 +9436,11 @@ async function _dsSupabaseConnectCore(url,anonKey,opts){
     let existingPayload=null;
     // TEMP DEBUG (remove after diagnosis): log request target + timing.
     console.log('[SB DEBUG] Supabase URL:',url);
-    console.log('[SB DEBUG] Table:','b2_tracker_data');
+    console.log('[SB DEBUG] Table:',TABLE_NAME);
     console.log('[SB DEBUG] Querying id:','main');
     console.time('Supabase connect');
     const _sbResp=await Promise.race([
-      client.from('b2_tracker_data').select('payload').eq('id','main').maybeSingle(),
+      client.from(TABLE_NAME).select('payload').eq('id','main').maybeSingle(),
       new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),10000))
     ]);
     console.timeEnd('Supabase connect');
@@ -9407,8 +9464,8 @@ async function _dsSupabaseConnectCore(url,anonKey,opts){
     window._DS._sbClient=client;
 
     // ── Attach real-time channel (same merge behaviour as Firebase) ──
-    window._DS._sbChannel=client.channel('b2_tracker_data_changes')
-      .on('postgres_changes',{event:'*',schema:'public',table:'b2_tracker_data',filter:'id=eq.main'},payload=>{
+    window._DS._sbChannel=client.channel(TABLE_NAME+'_changes')
+      .on('postgres_changes',{event:'*',schema:'public',table:TABLE_NAME,filter:'id=eq.main'},payload=>{
         try{
           const val=payload.new&&payload.new.payload;
           if(!val)return;
@@ -9460,7 +9517,7 @@ async function _dsSupabaseConnectCore(url,anonKey,opts){
       if(existingPayload.mtgFeats)saveMtgFeats(Array.isArray(existingPayload.mtgFeats)?existingPayload.mtgFeats:Object.values(existingPayload.mtgFeats));
       render();updateStats();
     }else{
-      const {error:upsertErr}=await client.from('b2_tracker_data').upsert({id:'main',payload:window._DS._serialize(data),updated_at:new Date().toISOString()});
+      const {error:upsertErr}=await client.from(TABLE_NAME).upsert({id:'main',payload:window._DS._serialize(data),updated_at:new Date().toISOString()});
       if(upsertErr)throw upsertErr;
     }
 
@@ -10795,14 +10852,33 @@ function defaultData(){
 // by matching the Task's user-editable display name, which can be renamed
 // at any time. This library is intentionally static; it is not meant to be
 // user-editable from the UI at this stage.
+// Task 1 (System Task List redesign): the 12 project lifecycle stages,
+// in the exact required order. Four codes are deliberately preserved
+// from the previous list — SYS_BUDGET_APPROVAL, SYS_TENDER, SYS_PO,
+// SYS_DELIVERY — because Asset Readiness's business rules (see
+// arFindTaskByCode/arBudgetApprovalStatus and the Tender/PO gate below)
+// identify a Sub Task by this permanent code, not its display name. Only
+// the display text changed for SYS_PO ("Purchase Order" → "PO Raised")
+// and SYS_DELIVERY ("Delivery" → "Delivery Process") to match the new
+// wording; the codes themselves are untouched so existing tagged Sub
+// Tasks and Asset Readiness keep working exactly as before. The three
+// old codes with no equivalent in the new list (SYS_COMMISSIONING,
+// SYS_TESTING, SYS_HANDOVER) were not referenced anywhere else in the
+// app, so they were safely dropped. The remaining 8 items are new stages
+// with new codes.
 const SYSTEM_TASK_LIBRARY=[
+  {code:'SYS_REQUIREMENT_STAGE',name:'Requirement Stage'},
+  {code:'SYS_PR_RAISED',name:'PR Raised'},
+  {code:'SYS_COMMITTEE_APPROVAL',name:'Committee Approval'},
   {code:'SYS_BUDGET_APPROVAL',name:'Budget Approval'},
+  {code:'SYS_INITIAL_BOARD_APPROVAL',name:'Initial Board Approval'},
   {code:'SYS_TENDER',name:'Tender Process'},
-  {code:'SYS_PO',name:'Purchase Order'},
-  {code:'SYS_DELIVERY',name:'Delivery'},
-  {code:'SYS_COMMISSIONING',name:'Commissioning'},
-  {code:'SYS_TESTING',name:'Testing'},
-  {code:'SYS_HANDOVER',name:'Handover'}
+  {code:'SYS_EVALUATION_COMMITTEE',name:'Evaluation Committee'},
+  {code:'SYS_AWARD_APPROVAL',name:'Award Approval (Board/CEO)'},
+  {code:'SYS_AGREEMENT_SIGNING',name:'Agreement Signing Process'},
+  {code:'SYS_PO',name:'PO Raised'},
+  {code:'SYS_DELIVERY',name:'Delivery Process'},
+  {code:'SYS_GOODS_RECEIVED',name:'Goods Received'}
 ];
 function populateSystemTaskDropdown(){
   const sel=document.getElementById('field-systask');
@@ -13396,35 +13472,46 @@ function quickUpdate(id){
 }
 
 function updateStats(){
-  const allProgs=[];
-  function collect(nodes){nodes.forEach(n=>{allProgs.push(calcProgress(n));collect(n.children||[]);});}
-  collect(data.nodes);
-  // Task Fix (Program Progress KPI — single source of truth): this KPI must
-  // equal the same per-Program calcProgress() value(s) shown as each
-  // Program's row in Project Structure, not a flat average across every
-  // node at every depth of the tree (Program+Project+Task+Sub Task mixed
-  // together with equal weight) — that was a different statistic and
-  // diverges further as the tree grows. data.nodes are exactly the
-  // top-level Program (level 0) nodes, so calcProgress() applied only to
-  // them, averaged, is precisely "the same values Project Structure
-  // displays" — with one Program, this is now always identical to that
-  // Program's own row. calcProgress() itself is unchanged; only the set of
-  // nodes fed into this specific KPI changed. allProgs (used below for
-  // Completion Rate, which is intentionally a whole-tree statistic) is
-  // untouched.
-  const programProgs=data.nodes.map(n=>calcProgress(n));
-  const overall=programProgs.length?Math.round(programProgs.reduce((a,b)=>a+b,0)/programProgs.length):0;
-  const c=countAll(data.nodes);
-  document.getElementById('stat-overall').innerHTML=overall+'<span>%</span>';
-  document.getElementById('stat-modules').textContent=data.nodes.length;
-  document.getElementById('stat-tasks').textContent=c.tasks;
-  const done=allProgs.filter(p=>p===100).length;
-  const pct=allProgs.length?Math.round(done/allProgs.length*100):0;
-  document.getElementById('stat-done').innerHTML=pct+'<span>%</span>';
-  // Feature counts
-  let featTotal=0,featDone=0;
-  Object.values(featuresMap).forEach(arr=>{featTotal+=arr.length;featDone+=arr.filter(f=>f.done).length;});
-  document.getElementById('stat-features').textContent=featDone+' / '+featTotal;
+  // Task 2 (KPI Header redesign): all four KPIs now use a consistent
+  // "Completed / Total" fraction format at their respective tree level,
+  // rather than mixing averaged percentages with raw counts.
+  function flattenByLevel(nodes,lvl,out){
+    out=out||[];
+    (nodes||[]).forEach(n=>{
+      if((n.level||0)===lvl)out.push(n);
+      if(n.children&&n.children.length)flattenByLevel(n.children,lvl,out);
+    });
+    return out;
+  }
+  // Program Progress: Completed Programs (level 0) / Total Programs.
+  const allPrograms=flattenByLevel(data.nodes,0);
+  const doneProgramsCount=allPrograms.filter(n=>calcProgress(n)===100).length;
+  document.getElementById('stat-overall').textContent=doneProgramsCount+' / '+allPrograms.length;
+  // Project Progress: Completed Projects (level 1) / Total Projects.
+  const allProjects=flattenByLevel(data.nodes,1);
+  const doneProjectsCount=allProjects.filter(n=>calcProgress(n)===100).length;
+  document.getElementById('stat-tasks').textContent=doneProjectsCount+' / '+allProjects.length;
+  // Task Progress: Completed Tasks (level 2 only — Sub Task excluded per
+  // requirement) / Total Tasks. Root-cause fix: this used to be a
+  // Features/Activities count under the "Completed Tasks" label, which
+  // never actually reflected Task-level completion at all.
+  const allTasks=flattenByLevel(data.nodes,2);
+  const doneTasksCount=allTasks.filter(n=>calcProgress(n)===100).length;
+  document.getElementById('stat-features').textContent=doneTasksCount+' / '+allTasks.length;
+  // Meeting Task: Completed / Total Meeting Tasks — counts only rows across
+  // all meetings where the Meeting Task field itself has content, regardless
+  // of assignment or the viewing user's My Task permissions (this is a
+  // page-wide KPI, not a personal list, so it deliberately does not go
+  // through getMyTasks()'s per-user filtering).
+  let mtgTaskTotal=0,mtgTaskDone=0;
+  loadMom().forEach(m=>{
+    (m.items||[]).forEach(row=>{
+      if(!row.task||!row.task.trim())return;
+      mtgTaskTotal++;
+      if(row.status==='completed')mtgTaskDone++;
+    });
+  });
+  document.getElementById('stat-done').textContent=mtgTaskDone+' / '+mtgTaskTotal;
   // Task 2: Milestone Countdown KPI (replaces Top Performer)
   updateMilestoneCountdown();
 }
@@ -14575,6 +14662,12 @@ function tplDeleteClick(){
   document.getElementById('tpl-modal').classList.remove('open');
   document.getElementById('confirm-title').textContent='Delete Template';
   document.getElementById('confirm-msg').innerHTML=`Are you sure you want to delete the template "${eH(name)}"?<br><br>This action is <b>permanent and cannot be undone</b>. Phases already created from this template are not affected.`;
+  // Shared confirm-box: reset any state left over from the Deletion
+  // Validation Flow (askDelete), which can hide/disable this button.
+  const yesBtn=document.getElementById('confirm-yes-btn');
+  if(yesBtn){yesBtn.style.display='';yesBtn.disabled=false;}
+  const ackWrap=document.getElementById('confirm-ack-wrap');
+  if(ackWrap)ackWrap.style.display='none';
   document.getElementById('confirm-box').classList.add('open');
 }
 // Task (Phase Modal Integration): keeps the Phase modal's "Select
@@ -15501,8 +15594,50 @@ function modalDeleteClick(){
   document.getElementById('modal').classList.remove('open');
   askDelete(id);
 }
+// Task 1 (Deletion Validation Flow — Data Integrity):
+// Walks a node's real tree descendants (Program→Project→Task→Sub Task,
+// levels 0-3) plus every Activity (masterFeats) that references the node
+// itself (if it's a Task/Sub Task) or any Task/Sub Task within its
+// subtree — Activities are never tree children, they're a separate
+// record linked via submoduleId/moduleId, so they must be found this way
+// rather than by walking node.children.
+// "Active" = calcProgress() !== 100 (the same completion signal used
+// everywhere else in the app); "Completed" = calcProgress() === 100.
+// A node's OWN active/incomplete status does not block its own deletion
+// (that's an ordinary edit decision) — only DESCENDANT active records,
+// and any Activities linked directly to the node itself, do.
+function arCollectDeletionImpact(node){
+  const levelNames=['Program','Project','Task','Sub Task'];
+  const nodeCounts=[0,1,2,3].map(()=>({active:0,completed:0}));
+  const masterFeats=loadMasterFeats();
+  let actActive=0,actCompleted=0;
+  function activityRef(f){return f.submoduleId!=null?f.submoduleId:f.moduleId;}
+  function tallyActivities(n){
+    masterFeats.forEach(f=>{
+      if(String(activityRef(f))!==String(n.id))return;
+      if((f.status||'')==='completed')actCompleted++; else actActive++;
+    });
+  }
+  function walkDescendants(n){
+    (n.children||[]).forEach(child=>{
+      const lvl=child.level||0;
+      if(nodeCounts[lvl]){
+        const done=calcProgress(child)===100;
+        if(done)nodeCounts[lvl].completed++; else nodeCounts[lvl].active++;
+      }
+      if(lvl===2||lvl===3)tallyActivities(child);
+      walkDescendants(child);
+    });
+  }
+  const rootLvl=node.level||0;
+  if(rootLvl===2||rootLvl===3)tallyActivities(node); // Activities linked directly to the node being deleted
+  walkDescendants(node);
+  return{levelNames,nodeCounts,actActive,actCompleted};
+}
 // Level-specific cascade descriptions, matching what will actually be removed with this node.
 const _cascadeChildLabels=['Projects, all Tasks, all Sub Tasks/Activities, and all associated child records','Tasks, all Sub Tasks/Activities under them, and all associated child records','Sub Tasks/Activities and all associated child records','associated child records (if applicable)'];
+let pendingDeleteBlocked=false;
+let pendingDeleteNeedsSuperadminConfirm=false;
 function askDelete(id){
   if(!canEdit())return;
   window._resetPending=false;
@@ -15512,10 +15647,82 @@ function askDelete(id){
   // in effect for them.
   if((node.level||0)===0&&!hasProgramPermission(id,'delete')){toast('You do not have Delete permission for this Program','error');return;}
   pendingDeleteId=id;
+  pendingDeleteBlocked=false;
+  pendingDeleteNeedsSuperadminConfirm=false;
   const levelNames=['Program','Project','Task','Sub Task'];
   const lvl=node.level||0;
   const levelName=levelNames[lvl]||'Item';
+  const yesBtn=document.getElementById('confirm-yes-btn');
+  const ackWrap=document.getElementById('confirm-ack-wrap');
+  const ackCb=document.getElementById('confirm-ack-cb');
+  if(ackCb)ackCb.checked=false;
   document.getElementById('confirm-title').textContent='Delete '+levelName;
+
+  const impact=arCollectDeletionImpact(node);
+  // Active/incomplete descendants (Projects, Tasks, Sub Tasks) and Activities
+  // block deletion entirely — for everyone, no override — until resolved.
+  const activeLines=[];
+  [1,2,3].forEach(l=>{ // Project, Task, Sub Task — not Program (a Program is never itself a "descendant")
+    const n=impact.nodeCounts[l].active;
+    if(n>0){
+      const name=impact.levelNames[l]+(n===1?'':'s');
+      activeLines.push(`${n} ${name} ${n===1?'is':'are'} active. Delete ${n===1?'it':'them'} first.`);
+    }
+  });
+  if(impact.actActive>0){
+    activeLines.push(`${impact.actActive} Activit${impact.actActive===1?'y is':'ies are'} linked to active Tasks/Sub Tasks. Resolve ${impact.actActive===1?'it':'them'} first.`);
+  }
+  if(activeLines.length){
+    pendingDeleteBlocked=true;
+    document.getElementById('confirm-msg').innerHTML=
+      `<b>"${eH(node.name)}" cannot be deleted yet.</b><br><br>`+activeLines.join('<br>');
+    if(yesBtn)yesBtn.style.display='none';
+    if(ackWrap)ackWrap.style.display='none';
+    document.getElementById('confirm-box').classList.add('open');
+    return;
+  }
+
+  // No active records — but completed Projects/Tasks/Sub Tasks/Activities
+  // (historical data) are gated to Super Admin only, per requirement.
+  const completedLines=[];
+  [1,2,3].forEach(l=>{
+    const n=impact.nodeCounts[l].completed;
+    if(n>0)completedLines.push(`${n} completed ${impact.levelNames[l]}${n===1?'':'s'}`);
+  });
+  if(impact.actCompleted>0)completedLines.push(`${impact.actCompleted} completed Activit${impact.actCompleted===1?'y':'ies'}`);
+
+  if(completedLines.length){
+    if(currentRole()!=='superadmin'){
+      pendingDeleteBlocked=true;
+      document.getElementById('confirm-msg').innerHTML=
+        `<b>"${eH(node.name)}" cannot be deleted.</b><br><br>`+
+        `It contains completed historical data: ${completedLines.join(', ')}.<br><br>`+
+        `Only a Super Admin can delete a record that contains completed data.`;
+      if(yesBtn)yesBtn.style.display='none';
+      if(ackWrap)ackWrap.style.display='none';
+      document.getElementById('confirm-box').classList.add('open');
+      return;
+    }
+    // Super Admin: allowed, but with an explicit warning and a required
+    // acknowledgement checkbox — completed/historical data is never
+    // deleted silently, even for Super Admin.
+    pendingDeleteNeedsSuperadminConfirm=true;
+    const childLabel=_cascadeChildLabels[Math.min(lvl,3)];
+    document.getElementById('confirm-msg').innerHTML=
+      `<b>⚠ "${eH(node.name)}" contains completed historical data:</b><br>`+
+      completedLines.join(', ')+`.<br><br>`+
+      `Deleting it will permanently remove this completed data along with all its `+childLabel+`. `+
+      `This <b>cannot be undone</b>.`;
+    if(yesBtn){yesBtn.style.display='';yesBtn.disabled=true;}
+    if(ackWrap)ackWrap.style.display='';
+    document.getElementById('confirm-box').classList.add('open');
+    return;
+  }
+
+  // Nothing active or completed below this node — ordinary delete, same
+  // confirmation flow as before this change.
+  if(yesBtn){yesBtn.style.display='';yesBtn.disabled=false;}
+  if(ackWrap)ackWrap.style.display='none';
   const childLabel=_cascadeChildLabels[Math.min(lvl,3)];
   document.getElementById('confirm-msg').innerHTML=
     `Are you sure you want to delete `+levelName.toLowerCase()+` "${eH(node.name)}"?<br><br>`+
@@ -15547,9 +15754,52 @@ function confirmDelete(){
     return;
   }
   if(!canEdit())return;
+  // Task 1 (Deletion Validation Flow): honor the gates set by askDelete().
+  // pendingDeleteBlocked means active records (or completed records for a
+  // non-Super Admin) exist — never proceed, regardless of how this got
+  // triggered. pendingDeleteNeedsSuperadminConfirm means completed/historical
+  // data exists and only a Super Admin who has ticked the acknowledgement
+  // checkbox may proceed.
+  if(pendingDeleteBlocked){closeConfirm();return;}
+  if(pendingDeleteNeedsSuperadminConfirm){
+    if(currentRole()!=='superadmin'){closeConfirm();return;}
+    const ackCb=document.getElementById('confirm-ack-cb');
+    if(!ackCb||!ackCb.checked)return; // button is disabled until checked, but guard anyway
+  }
+  const node=findNode(pendingDeleteId,data.nodes);
+  // Root-cause fix (Deletion Validation Flow): capture every id in the
+  // subtree BEFORE removeNode() runs, then sweep Activities (masterFeats),
+  // the meeting-feature assignment bridge (mtgFeats), and performance
+  // scores tied to them — otherwise Activities referencing a deleted
+  // Task/Sub Task become orphaned records with broken references, exactly
+  // the data-integrity issue this flow exists to prevent. Uses the same
+  // cleanup calls already used by single-Activity deletion (deleteFeat),
+  // just applied to every Activity affected by this cascade instead of one.
+  let deletedActivityCount=0;
+  if(node){
+    const subtreeIds=new Set();
+    const rootLvl=node.level||0;
+    if(rootLvl===2||rootLvl===3)subtreeIds.add(node.id);
+    (function walk(n){(n.children||[]).forEach(c=>{subtreeIds.add(c.id);walk(c);});})(node);
+    const activityRef=f=>f.submoduleId!=null?f.submoduleId:f.moduleId;
+    const allFeats=loadMasterFeats();
+    const toDelete=allFeats.filter(f=>subtreeIds.has(activityRef(f)));
+    if(toDelete.length){
+      deletedActivityCount=toDelete.length;
+      toDelete.forEach(f=>removeScoresForFeature(activityRef(f),f.id));
+      const keepFeats=allFeats.filter(f=>!subtreeIds.has(activityRef(f)));
+      saveMasterFeats(keepFeats);
+      subtreeIds.forEach(nid=>{delete featuresMap[nid];});
+      saveFeatures();
+      const toDeleteIds=new Set(toDelete.map(f=>f.id));
+      saveMtgFeats(loadMtgFeats().filter(r=>!toDeleteIds.has(r.featureId)));
+    }
+  }
   removeNode(pendingDeleteId,data.nodes);
   if(selectedId===pendingDeleteId)selectedId=null;
-  save();render();closeConfirm();toast('Deleted');
+  save();render();updateStats();renderFeatures();closeConfirm();
+  toast(deletedActivityCount?`Deleted (${deletedActivityCount} linked Activit${deletedActivityCount===1?'y':'ies'} also removed)`:'Deleted');
+  pendingDeleteBlocked=false;pendingDeleteNeedsSuperadminConfirm=false;
 }
 function setOpenAll(nodes,v){nodes.forEach(n=>{n.open=v;setOpenAll(n.children||[],v);});}
 function expandAll(){tsSuppressProjectAutoOpen=false;setOpenAll(data.nodes,true);save();render();}
@@ -15628,15 +15878,25 @@ function renderMomTable(){
   const teamsById={};loadTeams().forEach(t=>teamsById[t.id]=t.name||'');
   if(q){
     const teamsByIdLower={};loadTeams().forEach(t=>teamsByIdLower[t.id]=(t.name||'').toLowerCase());
-    list=list.filter(m=>(m.number||'').toLowerCase().includes(q)||(teamsByIdLower[m.chairperson]||'').includes(q)||(m.agendaItems||[]).some(a=>a.toLowerCase().includes(q)));
+    list=list.filter(m=>(m.number||'').toLowerCase().includes(q)||(teamsByIdLower[m.chairperson]||'').includes(q)||(m.agendaItems||[]).some(a=>a.toLowerCase().includes(q))||(m.items||[]).some(r=>(r.item||'').toLowerCase().includes(q)||(r.discussion||'').toLowerCase().includes(q)||(r.task||'').toLowerCase().includes(q)));
   }
   if(dFilter)list=list.filter(m=>m.date===dFilter);
   if(!list.length){
-    tbody.innerHTML='<tr><td colspan="9" style="padding:20px;text-align:center;color:var(--muted2)">No meetings recorded yet.</td></tr>';
+    tbody.innerHTML='<tr><td colspan="10" style="padding:20px;text-align:center;color:var(--muted2)">No meetings recorded yet.</td></tr>';
     return;
   }
   tbody.innerHTML=list.map((m,i)=>{
-    const itemHtml=(m.agendaItems||[]).map((a,idx)=>eH((idx+1)+'- '+a)).join('<br>');
+    // Agenda Item preview: short item names only, capped at 2 with an
+    // "...more" indicator — clicking the cell (or the whole row) opens the
+    // read-only Meeting Minutes view, which shows every Agenda Item with its
+    // full Item Details/Conclusion/Meeting Task.
+    const agendaNames=(m.items||[]).map(r=>r.item).filter(v=>v&&v.trim());
+    const shown=agendaNames.slice(0,2).map((v,idx)=>(idx+1)+'- '+eH(v)).join('<br>');
+    const itemHtml=agendaNames.length>2?(shown+'<br><span style="color:var(--muted2);font-style:italic">...'+(agendaNames.length-2)+' more</span>'):shown;
+    // Total Task: counts rows with a non-empty Meeting Task field (not the
+    // old Assigned-To-based count) — existing meetings saved before the
+    // Meeting Task field existed will show 0 until that field is filled in.
+    const totalTasks=(m.items||[]).filter(r=>r.task!=null&&String(r.task).trim()!=='').length;
     const dtStr=m.date?(new Date(m.date+'T'+(m.time||'00:00')).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit'})+', '+(m.time||'')):'';
     const pdfCell=m.pdf&&m.pdf.dataUrl?`<button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();openMomPdfViewer(${m.id})">View</button>`:'<span style="color:var(--muted2)">—</span>';
     const chairName=teamsById[m.chairperson]||'—';
@@ -15646,12 +15906,13 @@ function renderMomTable(){
       <td style="padding:9px 10px">${eH(m.type||'')}</td>
       <td style="padding:9px 10px">${eH(chairName)}</td>
       <td style="padding:9px 10px;font-size:12px">${itemHtml||'<span style="color:var(--muted2)">—</span>'}</td>
+      <td style="padding:9px 10px;text-align:center;font-weight:700">${totalTasks}</td>
       <td style="padding:9px 10px">${eH(dtStr)}</td>
       <td style="padding:9px 10px;text-align:center"><button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();openMomAttendanceView(${m.id})">View</button></td>
       <td style="padding:9px 10px;text-align:center">${pdfCell}</td>
       <td style="padding:9px 10px;text-align:center">
         <button class="icon-btn" onclick="event.stopPropagation();momEditIfAllowed(${m.id})" title="Edit Meeting">✎</button>
-        <button class="icon-btn" style="color:var(--red)" onclick="event.stopPropagation();momDirectDelete(${m.id})" title="Remove Meeting">✕</button>
+        <button class="icon-btn" onclick="event.stopPropagation();openMomViewModal(${m.id})" title="View Meeting Minutes">👁</button>
       </td>
     </tr>`;
   }).join('');
@@ -15695,15 +15956,19 @@ function momActionDelete(){
   toast('Meeting deleted');
 }
 
-// Task 3: direct Remove (X) action in the table — replaces the "⋮ More" popover trigger for deletion.
-// View Meeting Details / Edit remain reachable by clicking anywhere else on the row.
-// Task 2: Edit action — reuses the existing "canEditMeeting" RBAC permission
-// (already governs Sprint Meeting edits) so Meeting Management edits go through
-// the same permission check rather than a brand-new one.
+// Meeting Modal redesign: the list-page Actions column now shows Edit + a
+// dedicated View (👁) icon instead of a direct ✕ delete — deletion moved
+// inside the modal (see momModalDelete, gated behind opening the meeting
+// first + a confirmation dialog).
+// Edit action reuses the existing "canMeetingEdit" RBAC permission (already
+// governs Sprint Meeting edits) so Meeting Management edits go through the
+// same permission check rather than a brand-new one.
 function momEditIfAllowed(id){
   if(!canMeetingEdit()){toast('You do not have permission to edit meetings','error');return;}
   openMomModal(id);
 }
+// No longer called from the UI (superseded by momModalDelete inside the
+// modal) — left in place rather than removed, per minimal-diff scope.
 function momDirectDelete(id){
   if(!id)return;
   if(!confirm('Remove this meeting? This cannot be undone.'))return;
@@ -15765,6 +16030,7 @@ function openMomModal(id){
   }
   updateMomAttSummary();
   renderMomItemsTable();
+  document.getElementById('mom-delete-btn').style.display=id?'inline-flex':'none';
   document.getElementById('mom-modal').classList.add('open');
 }
 function closeMomModal(){document.getElementById('mom-modal').classList.remove('open');}
@@ -15773,7 +16039,7 @@ function renderMomItemsTable(){
   const tbody=document.getElementById('mom-items-tbody');
   const teams=loadTeams();
   if(!momItemsRows.length){
-    tbody.innerHTML='<tr><td colspan="7" style="padding:16px;text-align:center;color:var(--muted2);font-size:12px">No items yet — use "Add Agenda item" above to add a row.</td></tr>';
+    tbody.innerHTML='<tr><td colspan="8" style="padding:16px;text-align:center;color:var(--muted2);font-size:12px">No items yet — use "Add Agenda item" above to add a row.</td></tr>';
     return;
   }
   const cellInputStyle="width:100%;padding:8px 10px;font-size:12px;border:none;border-radius:0;background:transparent;color:var(--text);outline:none";
@@ -15786,13 +16052,14 @@ function renderMomItemsTable(){
       <td style="padding:0;border-bottom:1px solid var(--border);vertical-align:top"><input type="text" value="${eH(r.item||'')}" oninput="momItemsRows[${i}].item=this.value" style="${cellInputStyle}"></td>
       <td style="padding:0;border-bottom:1px solid var(--border);vertical-align:top"><textarea rows="3" oninput="momItemsRows[${i}].discussion=this.value" style="${cellTextareaStyle}">${eH(r.discussion||'')}</textarea></td>
       <td style="padding:0;border-bottom:1px solid var(--border);vertical-align:top"><textarea rows="3" oninput="momItemsRows[${i}].decisions=this.value" style="${cellTextareaStyle}">${eH(r.decisions||'')}</textarea></td>
+      <td style="padding:0;border-bottom:1px solid var(--border);vertical-align:top"><textarea rows="3" oninput="momItemsRows[${i}].task=this.value" style="${cellTextareaStyle}">${eH(r.task||'')}</textarea></td>
       <td style="padding:0;border-bottom:1px solid var(--border);vertical-align:top"><select onchange="momItemsRows[${i}].assignedTo=this.value" style="${cellInputStyle};padding:8px 6px">${teamOpts}</select></td>
       <td style="padding:0;border-bottom:1px solid var(--border);vertical-align:top"><input type="date" value="${eH(r.dueDate||'')}" onchange="momItemsRows[${i}].dueDate=this.value" style="${cellInputStyle};padding:8px 6px"></td>
       <td style="padding:8px 10px;text-align:center;border-bottom:1px solid var(--border);vertical-align:top"><button class="btn btn-ghost btn-xs" onclick="toggleMomItemActionMenu(event,${i})" title="Actions" style="font-size:15px;line-height:1;padding:4px 9px">⋮</button></td>
     </tr>`;
   }).join('');
 }
-function addMomItemRow(){momItemsRows.push({item:'',discussion:'',decisions:'',assignedTo:'',dueDate:''});renderMomItemsTable();}
+function addMomItemRow(){momItemsRows.push({item:'',discussion:'',decisions:'',task:'',assignedTo:'',dueDate:''});renderMomItemsTable();}
 function removeMomItemRow(i){momItemsRows.splice(i,1);renderMomItemsTable();}
 
 // Task 1: Meeting Details row action menu — Expand Meeting Details / Delete
@@ -15829,9 +16096,10 @@ function momItemActionExpand(){
   const teams=loadTeams();
   const assignedName=(teams.find(t=>String(t.id)===String(r.assignedTo))||{}).name||'—';
   document.getElementById('mom-item-expand-body').innerHTML=`
-    <div class="detail-block"><div class="detail-block-title">Item</div><div style="font-size:13px">${r.item?eH(r.item):'<span style="color:var(--muted2);font-style:italic">—</span>'}</div></div>
-    <div class="detail-block"><div class="detail-block-title">Discission</div><div class="remarks-display">${r.discussion?eH(r.discussion):'<span style="color:var(--muted2);font-style:italic">—</span>'}</div></div>
-    <div class="detail-block"><div class="detail-block-title">Decisions</div><div class="remarks-display">${r.decisions?eH(r.decisions):'<span style="color:var(--muted2);font-style:italic">—</span>'}</div></div>
+    <div class="detail-block"><div class="detail-block-title">Agenda Item</div><div style="font-size:13px">${r.item?eH(r.item):'<span style="color:var(--muted2);font-style:italic">—</span>'}</div></div>
+    <div class="detail-block"><div class="detail-block-title">Item Details</div><div class="remarks-display">${r.discussion?eH(r.discussion):'<span style="color:var(--muted2);font-style:italic">—</span>'}</div></div>
+    <div class="detail-block"><div class="detail-block-title">Conclusion</div><div class="remarks-display">${r.decisions?eH(r.decisions):'<span style="color:var(--muted2);font-style:italic">—</span>'}</div></div>
+    <div class="detail-block"><div class="detail-block-title">Meeting Task</div><div class="remarks-display">${r.task?eH(r.task):'<span style="color:var(--muted2);font-style:italic">—</span>'}</div></div>
     <div class="detail-block"><div class="detail-block-title">Assigned To</div><div style="font-size:13px">${eH(assignedName)}</div></div>
     <div class="detail-block"><div class="detail-block-title">Due Date</div><div style="font-size:13px">${r.dueDate?eH(formatDateShort(r.dueDate)):'<span style="color:var(--muted2);font-style:italic">—</span>'}</div></div>
   `;
@@ -15856,20 +16124,26 @@ function getMyTasks(){
   const teams=loadTeams();
   const teamName=id=>{const t=teams.find(x=>String(x.id)===String(id));return t?t.name:'';};
   const tasks=[];
-  // ── Source 1: Meeting assignments (unchanged) ──
+  // ── Source 1: Meeting assignments ──
+  // My Task redesign: a row is a "task" when the Meeting Task field itself
+  // has content — not merely because someone assigned it. This also means
+  // unassigned Meeting Tasks (assignedTo blank/null) are now included, so
+  // users can see what hasn't been picked up yet. Rows with no Meeting Task
+  // text (pure agenda/discussion notes) still don't appear here, same as
+  // before — they were never really "tasks" in the first place.
   meetings.forEach(m=>{
     (m.items||[]).forEach((row,idx)=>{
-      if(!row.assignedTo)return; // only rows with an assignee become a "task"
+      if(!row.task||!row.task.trim())return;
       tasks.push({
         source:'Meeting',
         meetingId:m.id,
         rowIndex:idx,
         meetingNumber:m.number||'',
         meetingDate:m.date||'',
-        taskName:row.item||'',
+        taskName:row.task||'',
         assignedDate:m.date||'', // derived from the meeting's own date — no new field needed
-        assignedToId:row.assignedTo,
-        assignedToName:teamName(row.assignedTo),
+        assignedToId:row.assignedTo||'',
+        assignedToName:row.assignedTo?teamName(row.assignedTo):'',
         status:row.status||'pending',
         remarksLog:row.remarksLog||[]
       });
@@ -15953,7 +16227,12 @@ function getMyTasks(){
   // bootstrap account with no Employee No / Team Member record of its own —
   // personal filtering would always show it nothing, so it sees everyone's
   // assignments instead, same as before this permission was introduced.
-  if(currentRole()==='superadmin')return tasks;
+  // "View All Tasks" (canViewAllTasks): a dedicated, off-by-default role grant
+  // available to Admin and Guest alike — once granted, the raw list here is
+  // unfiltered too, and the My Task page's Assigned Person filter (client-side,
+  // in renderMyTaskTable) narrows it down from there, defaulting to the
+  // signed-in user's own name so their default view is unchanged.
+  if(currentRole()==='superadmin'||canViewAllTasks())return tasks;
   // My Task permission (Task: dedicated, independent permission): once granted,
   // this page shows only the signed-in user's own assignments — reuses the
   // same Employee No → Team Member resolver already built for Job/Task
@@ -15978,14 +16257,107 @@ function myTaskFormatDateTime(ts){
   if(isNaN(d))return eH(ts);
   return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})+' '+d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
 }
+// ── Assigned Person filter (My Task redesign) ──────────────────────────
+// null until first initialized for this session; '__all__' means no filtering;
+// otherwise an array of team-member ids (as strings) and/or '__unassigned__'.
+let myTaskApSelected=null;
+function initMyTaskApFilter(){
+  const wrap=document.getElementById('mytask-ap-wrap');
+  if(!wrap)return;
+  const allowed=currentRole()==='superadmin'||canViewAllTasks();
+  if(!allowed){
+    wrap.style.display='none';
+    myTaskApSelected=null; // reset so it re-defaults correctly if permission is later granted
+    return;
+  }
+  wrap.style.display='flex';
+  wrap.style.alignItems='center';
+  if(myTaskApSelected===null){
+    // Default: the signed-in user's own name (per requirement — the filter
+    // opens already scoped to "my tasks" even though the underlying data now
+    // includes everyone). Superadmin has no personal Team Member record, so
+    // it defaults to "All", same as its existing behavior elsewhere.
+    const own=currentRole()==='superadmin'?[]:currentTodoTeamMemberIds().map(String);
+    myTaskApSelected=own.length?own:['__all__'];
+  }
+  updateMyTaskApBtnLabel();
+}
+function updateMyTaskApBtnLabel(){
+  const btn=document.getElementById('mytask-ap-btn');
+  if(!btn)return;
+  if(!myTaskApSelected||myTaskApSelected.includes('__all__')){btn.textContent='All';return;}
+  const teams=loadTeams();
+  const names=myTaskApSelected.map(v=>v==='__unassigned__'?'Unassigned':((teams.find(t=>String(t.id)===v)||{}).name||'')).filter(Boolean);
+  btn.textContent=names.length?(names.length>2?names.slice(0,2).join(', ')+' +'+(names.length-2):names.join(', ')):'All';
+}
+function toggleMyTaskApDropdown(){
+  const dd=document.getElementById('mytask-ap-dropdown');
+  if(!dd)return;
+  if(dd.style.display==='block'){dd.style.display='none';return;}
+  renderMyTaskApDropdown();
+  dd.style.display='block';
+}
+function renderMyTaskApDropdown(){
+  const dd=document.getElementById('mytask-ap-dropdown');
+  if(!dd)return;
+  const teams=loadTeams();
+  const sel=myTaskApSelected||['__all__'];
+  const rowStyle='display:flex;align-items:center;gap:8px;padding:8px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--border)';
+  let html=`<div style="${rowStyle}" onclick="myTaskApPick('__all__')"><span>${sel.includes('__all__')?'☑':'☐'}</span><span style="font-weight:600">All</span></div>`;
+  html+=`<div style="${rowStyle}" onclick="myTaskApPick('__unassigned__')"><span>${sel.includes('__unassigned__')?'☑':'☐'}</span><span>Unassigned</span></div>`;
+  html+=teams.map(t=>`<div style="${rowStyle}" onclick="myTaskApPick('${t.id}')"><span>${sel.includes(String(t.id))?'☑':'☐'}</span><span>${eH(t.name||'')} <span style="color:var(--muted2);font-size:11px">(${eH(t.code||'')})</span></span></div>`).join('');
+  dd.innerHTML=html;
+}
+function myTaskApPick(val){
+  let sel=(myTaskApSelected||['__all__']).slice();
+  if(val==='__all__'){
+    sel=['__all__'];
+  } else {
+    sel=sel.filter(v=>v!=='__all__');
+    if(sel.includes(val))sel=sel.filter(v=>v!==val);
+    else sel.push(val);
+    if(!sel.length)sel=['__all__']; // never leave the filter in an empty, confusing state
+  }
+  myTaskApSelected=sel;
+  renderMyTaskApDropdown();
+  updateMyTaskApBtnLabel();
+  renderMyTaskTable();
+}
+document.addEventListener('click',function(e){
+  const wrap=document.getElementById('mytask-ap-wrap');
+  const dd=document.getElementById('mytask-ap-dropdown');
+  if(dd&&dd.style.display==='block'&&wrap&&!wrap.contains(e.target))dd.style.display='none';
+});
 function renderMyTaskTable(){
   const tbody=document.getElementById('mytask-tbody');
   if(!tbody)return;
+  initMyTaskApFilter();
   const q=(document.getElementById('mytask-search')?.value||'').toLowerCase().trim();
   const statusFilter=document.getElementById('mytask-filter-status')?.value||'';
   let tasks=getMyTasks();
-  if(q)tasks=tasks.filter(t=>t.taskName.toLowerCase().includes(q)||t.meetingNumber.toLowerCase().includes(q)||t.assignedToName.toLowerCase().includes(q));
+  // Search: task/meeting-number/assignee name, plus (new) employee number
+  // (team.code) and raw member id — a quick way to find someone's tasks
+  // without opening the Assigned Person dropdown.
+  if(q){
+    const teams=loadTeams();
+    const codeById={};teams.forEach(t=>codeById[t.id]=(t.code||'').toLowerCase());
+    tasks=tasks.filter(t=>
+      t.taskName.toLowerCase().includes(q)||
+      t.meetingNumber.toLowerCase().includes(q)||
+      t.assignedToName.toLowerCase().includes(q)||
+      (codeById[t.assignedToId]||'').includes(q)||
+      String(t.assignedToId||'').toLowerCase().includes(q)
+    );
+  }
   if(statusFilter)tasks=tasks.filter(t=>t.status===statusFilter);
+  // Assigned Person filter (only meaningful/shown when canViewAllTasks/superadmin —
+  // see initMyTaskApFilter). myTaskApSelected includes '__all__' → no filtering.
+  if(myTaskApSelected&&!myTaskApSelected.includes('__all__')){
+    tasks=tasks.filter(t=>{
+      if(!t.assignedToId)return myTaskApSelected.includes('__unassigned__');
+      return myTaskApSelected.includes(String(t.assignedToId));
+    });
+  }
   const countEl=document.getElementById('mytask-count');
   if(countEl)countEl.textContent=tasks.length+' task(s)';
   if(!tasks.length){
@@ -15999,6 +16371,12 @@ function renderMyTaskTable(){
     const statusOnchange=isProject
       ?`myTaskSetStatusProjectItem(${t.nodeId},this.value)`
       :`myTaskSetStatus(${t.meetingId},${t.rowIndex},this.value)`;
+    // Unassigned Meeting Tasks (Assigned To blank/null) get a clearly
+    // labeled badge instead of a bare "—", so they stand out as needing
+    // to be picked up, per the "who hasn't been assigned yet" requirement.
+    const assignedCell=t.assignedToName
+      ?eH(t.assignedToName)
+      :'<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:rgba(255,90,90,.12);color:var(--red)">Unassigned</span>';
     return `<tr style="border-top:1px solid var(--border)">
       <td style="padding:9px 10px;color:var(--accent);font-weight:700">T-${String(i+1).padStart(3,'0')}</td>
       <td style="padding:9px 10px"><span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:${isProject?'rgba(0,198,255,.15)':'rgba(245,166,35,.15)'};color:${isProject?'var(--accent)':'var(--amber)'}">${isProject?'Project':'Meeting'}</span></td>
@@ -16006,7 +16384,7 @@ function renderMyTaskTable(){
       <td style="padding:9px 10px">${t.meetingDate?eH(formatDateShort(t.meetingDate)):'—'}</td>
       <td style="padding:9px 10px;font-weight:500">${eH(t.taskName)}</td>
       <td style="padding:9px 10px">${t.assignedDate?eH(formatDateShort(t.assignedDate)):'—'}</td>
-      <td style="padding:9px 10px">${eH(t.assignedToName||'—')}</td>
+      <td style="padding:9px 10px">${assignedCell}</td>
       <td style="padding:9px 10px">
         <select onchange="${statusOnchange}" ${canEdit()?'':'disabled'} style="padding:4px 8px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-family:var(--font-body)">
           <option value="pending"${t.status==='pending'?' selected':''}>Pending</option>
@@ -16318,7 +16696,7 @@ function addMomAgendaItem(){
   const val=(inp.value||'').trim();
   if(!val){toast('Enter or browse an agenda item first.','error');return;}
   momAgendaItems.push(val);
-  momItemsRows.push({item:val,discussion:'',decisions:'',assignedTo:'',dueDate:''});
+  momItemsRows.push({item:val,discussion:'',decisions:'',task:'',assignedTo:'',dueDate:''});
   inp.value='';
   renderMomItemsTable();
   toast('Agenda item added');
@@ -16337,7 +16715,7 @@ function openMomProjectPicker(){
       if((n.level||0)===2){
         const feats=featuresMap[n.id]||[];
         feats.forEach(f=>{
-          _momPickerRows.push({path:p+' – '+f.name,name:f.name,jobPath:p,activityStatus:f.activityStatus||(f.done?'completed':'todo')});
+          _momPickerRows.push({idx:_momPickerRows.length,path:p+' – '+f.name,name:f.name,jobPath:p,activityStatus:f.activityStatus||(f.done?'completed':'todo')});
         });
       }
       if(n.children&&n.children.length)walk(n.children,p);
@@ -16362,16 +16740,43 @@ function renderMomPickerList(){
   list.innerHTML=rows.map(r=>{
     const statusLabel=statusLabels[r.activityStatus]||'To Do';
     const statusColor=r.activityStatus==='completed'?'var(--green)':r.activityStatus==='inprogress'?'var(--accent)':r.activityStatus==='pendingreview'?'var(--amber)':'var(--muted)';
-    return `<tr onclick="pickMomProjectItem('${eH(r.path).replace(/'/g,"\\'")}')" style="cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+    return `<tr onclick="pickMomProjectItem(${r.idx})" style="cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
       <td style="padding:8px 10px" title="${eH(r.jobPath)}">${eH(r.name)}</td>
       <td style="padding:8px 10px;font-weight:700;color:${statusColor}">${statusLabel}</td>
     </tr>`;
   }).join('');
 }
 function closeMomProjectPicker(e){if(e&&e.target.id!=='mom-picker-modal')return;document.getElementById('mom-picker-modal').classList.remove('open');}
-function pickMomProjectItem(path){
-  document.getElementById('mom-agenda-input').value=path;
+// Fix (Browse workflow): selecting an activity no longer silently drops its path
+// into the free-text input. Instead it opens a confirmation popup showing the
+// full Project Structure hierarchy for that activity, so the user can verify
+// they picked the right one before it's added to the meeting.
+let _momPickerPending=null;
+function pickMomProjectItem(idx){
+  const r=_momPickerRows[idx];
+  if(!r)return;
+  _momPickerPending=r;
+  const levels=r.path.split(' – ');
+  document.getElementById('mom-picker-confirm-hierarchy').innerHTML=levels.map((lvl,i)=>
+    `<div style="padding-left:${i*18}px">${i>0?'→ ':''}${eH(lvl)}</div>`
+  ).join('');
   document.getElementById('mom-picker-modal').classList.remove('open');
+  document.getElementById('mom-picker-confirm-modal').classList.add('open');
+}
+function closeMomPickerConfirm(e){
+  if(e&&e.target.id!=='mom-picker-confirm-modal')return;
+  document.getElementById('mom-picker-confirm-modal').classList.remove('open');
+  _momPickerPending=null;
+}
+function confirmMomPickerPick(){
+  if(!_momPickerPending)return;
+  const val=_momPickerPending.path;
+  momAgendaItems.push(val);
+  momItemsRows.push({item:val,discussion:'',decisions:'',task:'',assignedTo:'',dueDate:''});
+  renderMomItemsTable();
+  document.getElementById('mom-picker-confirm-modal').classList.remove('open');
+  _momPickerPending=null;
+  toast('Agenda item added from Project Structure');
 }
 
 // ── Upload minutes PDF ───────────────────────────────────────────────
@@ -16447,7 +16852,7 @@ function saveMomMeeting(){
   const _leftoverAgenda=(_agendaInp&&_agendaInp.value||'').trim();
   if(_leftoverAgenda){
     momAgendaItems.push(_leftoverAgenda);
-    momItemsRows.push({item:_leftoverAgenda,discussion:'',decisions:'',assignedTo:'',dueDate:''});
+    momItemsRows.push({item:_leftoverAgenda,discussion:'',decisions:'',task:'',assignedTo:'',dueDate:''});
     _agendaInp.value='';
   }
 
@@ -16461,7 +16866,7 @@ function saveMomMeeting(){
     place:document.getElementById('mom-place').value,
     chairperson:document.getElementById('mom-chairperson').value.trim(),
     agendaItems:momAgendaItems,
-    items:momItemsRows.filter(r=>r.item||r.discussion||r.decisions||r.assignedTo||r.dueDate),
+    items:momItemsRows.filter(r=>r.item||r.discussion||r.decisions||r.task||r.assignedTo||r.dueDate),
     attendance:momAttendanceMap,
     pdf:momPdfData
   };
@@ -16475,6 +16880,19 @@ function saveMomMeeting(){
   closeMomModal();
   renderMomTable();
   toast('Meeting minutes saved');
+}
+// Delete entire meeting from inside the modal (Task 1: Delete Meeting button).
+// Only reachable when editing an existing saved meeting (button hidden for a
+// new, not-yet-saved draft — see openMomModal). Confirms before deleting;
+// does not affect any other meeting record.
+function momModalDelete(){
+  if(!momEditId)return;
+  if(!confirm('Delete this meeting permanently? This cannot be undone.'))return;
+  const list=loadMom().filter(m=>m.id!==momEditId);
+  saveMomList(list);
+  closeMomModal();
+  renderMomTable();
+  toast('Meeting deleted');
 }
 
 // ── View More (read-only) ────────────────────────────────────────────
@@ -16495,8 +16913,8 @@ function openMomViewModal(id){
   }).join(''):'<span style="color:var(--muted2)">No team members recorded.</span>';
   const teamsById={};attTeams.forEach(t=>teamsById[t.id]=t.name);
   const itemsHtml=(m.items||[]).length?`<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:6px">
-    <thead><tr style="background:var(--surface2)"><th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border)">Item</th><th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border)">Discission</th><th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border)">Decision / Task</th><th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border)">Assigned To</th><th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border)">Due Date</th></tr></thead>
-    <tbody>${m.items.map(r=>`<tr><td style="padding:6px 8px;border-bottom:1px solid var(--border)">${eH(r.item||'')}</td><td style="padding:6px 8px;border-bottom:1px solid var(--border)">${eH(r.discussion||'')}</td><td style="padding:6px 8px;border-bottom:1px solid var(--border)">${eH(r.decisions||'')}</td><td style="padding:6px 8px;border-bottom:1px solid var(--border)">${eH(teamsById[r.assignedTo]||'')}</td><td style="padding:6px 8px;border-bottom:1px solid var(--border)">${eH(r.dueDate||'')}</td></tr>`).join('')}</tbody>
+    <thead><tr style="background:var(--surface2)"><th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border)">Agenda Item</th><th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border)">Item Details</th><th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border)">Conclusion</th><th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border)">Meeting Task</th><th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border)">Assigned To</th><th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border)">Due Date</th></tr></thead>
+    <tbody>${m.items.map(r=>`<tr><td style="padding:6px 8px;border-bottom:1px solid var(--border)">${eH(r.item||'')}</td><td style="padding:6px 8px;border-bottom:1px solid var(--border)">${eH(r.discussion||'')}</td><td style="padding:6px 8px;border-bottom:1px solid var(--border)">${eH(r.decisions||'')}</td><td style="padding:6px 8px;border-bottom:1px solid var(--border)">${eH(r.task||'')}</td><td style="padding:6px 8px;border-bottom:1px solid var(--border)">${eH(teamsById[r.assignedTo]||'')}</td><td style="padding:6px 8px;border-bottom:1px solid var(--border)">${eH(r.dueDate||'')}</td></tr>`).join('')}</tbody>
   </table>`:'<span style="color:var(--muted2)">No minutes recorded.</span>';
   const pdfHtml=m.pdf&&m.pdf.dataUrl?`<button class="btn btn-ghost btn-sm" onclick="openMomPdfViewer(${m.id})">📄 ${eH(m.pdf.name||'View PDF')}</button>`:'<span style="color:var(--muted2)">No file uploaded.</span>';
   document.getElementById('mom-view-body').innerHTML=`
@@ -16509,6 +16927,7 @@ function openMomViewModal(id){
     <div style="margin-bottom:14px"><span style="color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase">Minutes</span>${itemsHtml}</div>
     <div><span style="color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase">Minutes File</span><div style="margin-top:4px">${pdfHtml}</div></div>
   `;
+  document.getElementById('mom-view-edit-btn').style.display=canMeetingEdit()?'inline-flex':'none';
   document.getElementById('mom-view-modal').classList.add('open');
 }
 function closeMomViewModal(e){if(e&&e.target.id!=='mom-view-modal')return;document.getElementById('mom-view-modal').classList.remove('open');}

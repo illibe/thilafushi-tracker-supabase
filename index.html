@@ -1356,13 +1356,15 @@ body.readonly .icon-btn.tl-expand-details-btn{pointer-events:auto;opacity:1;}
             <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:100px">Meeting No.</th>
             <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:100px">Meeting Date</th>
             <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border)">Task Name</th>
-            <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:100px">Assigned Date</th>
+            <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:100px">Due Date</th>
             <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:110px">Assigned To</th>
             <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:120px">Status</th>
+            <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:100px">Completed Date</th>
+            <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:100px">Total Due (Days)</th>
             <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:340px">Status Remarks</th>
           </tr>
         </thead>
-        <tbody id="mytask-tbody"><tr><td colspan="9" style="padding:20px;text-align:center;color:var(--muted2)">No tasks assigned yet.</td></tr></tbody>
+        <tbody id="mytask-tbody"><tr><td colspan="11" style="padding:20px;text-align:center;color:var(--muted2)">No tasks assigned yet.</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -8609,7 +8611,7 @@ const DEFAULT_SB_CONFIG={
 
 // Single switch for Testing vs Production Supabase table. Change APP_ENV only —
 // every real database operation reads TABLE_NAME derived from it below.
-const APP_ENV = 'PROD'; // TEST or PROD
+const APP_ENV = 'TEST'; // TEST or PROD
 const TABLE_NAME =
     APP_ENV === 'TEST'
         ? 'b2_tracker_data_Testing'
@@ -16136,12 +16138,18 @@ function getMyTasks(){
       if(!row.task||!row.task.trim())return;
       tasks.push({
         source:'Meeting',
+        isActivity:false,
         meetingId:m.id,
         rowIndex:idx,
         meetingNumber:m.number||'',
         meetingDate:m.date||'',
         taskName:row.task||'',
-        assignedDate:m.date||'', // derived from the meeting's own date — no new field needed
+        // Task (Due Date column): comes from the Meeting Minutes modal's own
+        // Due Date field (row.dueDate) — the meeting's own date (m.date) is
+        // no longer used for this column.
+        assignedDate:row.dueDate||'',
+        completedDate:row.completedDate||'',
+        activityPath:'',
         assignedToId:row.assignedTo||'',
         assignedToName:row.assignedTo?teamName(row.assignedTo):'',
         status:row.status||'pending',
@@ -16174,15 +16182,30 @@ function getMyTasks(){
     (node.children||[]).forEach(child=>{
       const lvl=child.level||0;
       if((lvl===2||lvl===3)&&(child.teamMembers||[]).length){
+        // Completed Date (Task/Sub Task): reuses the same node.history lookup
+        // already used by Job/Task History's Completed Date column — the
+        // latest history entry that reached 100% — rather than adding a
+        // separate field that would need to be kept in sync with it.
+        let completedDate='';
+        if(Array.isArray(child.history)){
+          const done=child.history.filter(h=>h.progress>=100).sort((a,b)=>new Date(b.ts)-new Date(a.ts))[0];
+          if(done)completedDate=done.ts;
+        }
         child.teamMembers.forEach(mid=>{
           const pct=calcProgress(child);
           tasks.push({
             source:'Project',
+            isActivity:false,
             nodeId:child.id,
             taskName:child.name,
             meetingNumber:'',
             meetingDate:'',
-            assignedDate:child.startDate||'',
+            // Due Date column: no Meeting Minutes Due Date applies to a
+            // Task/Sub Task — its own planned End Date is the closest
+            // existing equivalent, reused rather than inventing a field.
+            assignedDate:child.endDate||'',
+            completedDate,
+            activityPath:'',
             assignedToId:mid,
             assignedToName:teamName(mid),
             status:pct>=100?'completed':(pct>0?'inprogress':'pending'),
@@ -16203,17 +16226,30 @@ function getMyTasks(){
     if(!pid)return;
     const parentNode=findNode(pid,_freshData.nodes||[]);
     if(!parentNode)return;
+    // Task 4 (Activity Path): the ancestor chain of the Activity's parent
+    // Task/Sub Task — Program → Project → Task → Sub Task, whichever levels
+    // actually exist above it — reusing the same findNode/findParent walk
+    // already used elsewhere in the app (e.g. the Testing & Approval
+    // module's own path display) rather than a new resolution mechanism.
+    // Does not include the Activity's own name, since that's already shown
+    // in the Task Name column.
+    const pathParts=[parentNode.name];
+    let _pw=findParent(parentNode.id,_freshData.nodes||[],null);
+    while(_pw){pathParts.unshift(_pw.name);_pw=findParent(_pw.id,_freshData.nodes||[],null);}
     const assignedIds=new Set();
     mtgFeats.filter(r=>r.featureId===f.id).forEach(r=>(r.assignedTo||[]).forEach(mid=>assignedIds.add(mid)));
     (f.defaultAssignedTo||[]).forEach(mid=>assignedIds.add(mid));
     assignedIds.forEach(mid=>{
       tasks.push({
         source:'Project',
+        isActivity:true,
         nodeId:f.id,
         taskName:f.name,
         meetingNumber:'',
         meetingDate:'',
-        assignedDate:'',
+        assignedDate:'', // No due-date field exists on Activities (same as Job/Task History's handling)
+        completedDate:f.completedDate||'',
+        activityPath:pathParts.join('\\'),
         assignedToId:mid,
         assignedToName:teamName(mid),
         status:f.status==='completed'?'completed':(f.status==='inprogress'?'inprogress':'pending'),
@@ -16361,8 +16397,21 @@ function renderMyTaskTable(){
   const countEl=document.getElementById('mytask-count');
   if(countEl)countEl.textContent=tasks.length+' task(s)';
   if(!tasks.length){
-    tbody.innerHTML='<tr><td colspan="8" style="padding:20px;text-align:center;color:var(--muted2)">No tasks assigned yet.</td></tr>';
+    tbody.innerHTML='<tr><td colspan="11" style="padding:20px;text-align:center;color:var(--muted2)">No tasks assigned yet.</td></tr>';
     return;
+  }
+  // Task 3 (Total Due (Days)): whole-day difference between the relevant two
+  // dates, rounded — Current Date minus Due Date while Pending/In Progress,
+  // or Completed Date minus Due Date once Completed. Returns null (rendered
+  // as "—") whenever the required date(s) aren't available, e.g. Activities,
+  // which have no Due Date field at all.
+  function myTaskTotalDueDays(t){
+    if(!t.assignedDate)return null;
+    const due=new Date(t.assignedDate);
+    if(isNaN(due))return null;
+    const other=t.status==='completed'?(t.completedDate?new Date(t.completedDate):null):new Date();
+    if(!other||isNaN(other))return null;
+    return Math.round((other-due)/86400000);
   }
   tbody.innerHTML=tasks.map((t,i)=>{
     const latest=myTaskLatestRemark(t.remarksLog);
@@ -16377,12 +16426,28 @@ function renderMyTaskTable(){
     const assignedCell=t.assignedToName
       ?eH(t.assignedToName)
       :'<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:rgba(255,90,90,.12);color:var(--red)">Unassigned</span>';
+    // Task 4 (Activity Path): only Activities carry a non-empty activityPath —
+    // shown in a very small font directly under the task name, existing
+    // display for Meeting/Task/Sub Task rows is otherwise untouched.
+    const pathHtml=(t.isActivity&&t.activityPath)?`<div style="font-size:10px;color:var(--muted2);margin-top:2px">${eH(t.activityPath)}</div>`:'';
+    const totalDue=myTaskTotalDueDays(t);
+    const completedDateOnchange=isProject
+      ?`myTaskEditProjectCompletedDate(${t.nodeId},${t.isActivity},this.value)`
+      :`myTaskEditMeetingCompletedDate(${t.meetingId},${t.rowIndex},this.value)`;
+    // Task 1 (Editable Completed Date): only meaningful once a task is
+    // actually Completed — non-completed rows keep the original plain "—",
+    // unchanged. slice(0,10) safely extracts YYYY-MM-DD from either a
+    // date-only string (Meeting/Activity) or a full ISO timestamp
+    // (Task/Sub Task's node.history ts) for the date input's value.
+    const completedDateCell=t.status==='completed'
+      ?`<input type="date" value="${eH((t.completedDate||'').slice(0,10))}" onchange="${completedDateOnchange}" ${canEdit()?'':'disabled'} style="padding:4px 6px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-family:var(--font-body)">`
+      :'—';
     return `<tr style="border-top:1px solid var(--border)">
       <td style="padding:9px 10px;color:var(--accent);font-weight:700">T-${String(i+1).padStart(3,'0')}</td>
       <td style="padding:9px 10px"><span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:${isProject?'rgba(0,198,255,.15)':'rgba(245,166,35,.15)'};color:${isProject?'var(--accent)':'var(--amber)'}">${isProject?'Project':'Meeting'}</span></td>
       <td style="padding:9px 10px">${eH(t.meetingNumber)||'—'}</td>
       <td style="padding:9px 10px">${t.meetingDate?eH(formatDateShort(t.meetingDate)):'—'}</td>
-      <td style="padding:9px 10px;font-weight:500">${eH(t.taskName)}</td>
+      <td style="padding:9px 10px;font-weight:500">${eH(t.taskName)}${pathHtml}</td>
       <td style="padding:9px 10px">${t.assignedDate?eH(formatDateShort(t.assignedDate)):'—'}</td>
       <td style="padding:9px 10px">${assignedCell}</td>
       <td style="padding:9px 10px">
@@ -16392,6 +16457,8 @@ function renderMyTaskTable(){
           <option value="completed"${t.status==='completed'?' selected':''}>Completed</option>
         </select>
       </td>
+      <td style="padding:9px 10px">${completedDateCell}</td>
+      <td style="padding:9px 10px">${totalDue===null?'—':totalDue}</td>
       <td style="padding:9px 10px;max-width:340px">
         <div style="display:flex;align-items:center;gap:8px">
           <span style="font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0" title="${eH(latestText)}">${eH(latestText)||'—'}</span>
@@ -16552,9 +16619,67 @@ function myTaskSetStatusProjectItem(nodeId,newStatus){
   const idx=master.findIndex(f=>f.id===nodeId);
   if(idx<0)return;
   master[idx].status=newStatus==='completed'?'completed':(newStatus==='inprogress'?'inprogress':'backlog');
+  // Task 2 (Completed Date): same capture-once behavior as the Meeting
+  // source — no existing field/history tracks this for Activities, so this
+  // is the one new field this task required.
+  if(newStatus==='completed'&&!master[idx].completedDate){
+    master[idx].completedDate=new Date().toISOString().slice(0,10);
+  }
   saveMasterFeats(master);
   renderMyTaskTable();
   toast('Task status updated');
+}
+// Task 1 (Editable Completed Date): the date captured automatically when a
+// task first reaches Completed is now just the default — the user can
+// correct it afterward (e.g. they forgot to update status on the actual
+// completion day). Two functions, mirroring the existing
+// myTaskSetStatus/myTaskSetStatusProjectItem split, so each writes to
+// whichever store already owns that row's data — no new parallel storage.
+function myTaskEditMeetingCompletedDate(meetingId,rowIndex,newDate){
+  if(!canEdit()){toast('You do not have permission to update this task','error');return;}
+  const meetings=loadMom();
+  const m=meetings.find(x=>String(x.id)===String(meetingId));
+  if(!m||!m.items||!m.items[rowIndex])return;
+  m.items[rowIndex].completedDate=newDate||'';
+  saveMomList(meetings);
+  renderMyTaskTable();
+  toast('Completed date updated');
+}
+function myTaskEditProjectCompletedDate(nodeId,isActivity,newDate){
+  if(!canEdit()){toast('You do not have permission to update this task','error');return;}
+  if(isActivity){
+    // Task 2: Activity Completed Date is stored on the master feature
+    // record itself — the same field already populated by
+    // myTaskSetStatusProjectItem and already read by getMyTasks() as "the
+    // Activity Completed Date stored in Project Structure" (Activities live
+    // in loadMasterFeats(), not as separate Project Structure records), so
+    // editing it here and reading it in Project Structure are already the
+    // same field — no separate sync step needed.
+    const master=loadMasterFeats();
+    const idx=master.findIndex(f=>f.id===nodeId);
+    if(idx<0)return;
+    master[idx].completedDate=newDate||'';
+    saveMasterFeats(master);
+  } else {
+    // Task/Sub Task: no dedicated completedDate field exists (or is needed) —
+    // getMyTasks() derives this from the latest node.history entry that
+    // reached 100%, the same field Job/Task History already reads. Editing
+    // updates that same entry's timestamp in place, rather than introducing
+    // a second, competing date field for the same fact.
+    const node=findNode(nodeId,data.nodes);
+    if(!node)return;
+    if(!Array.isArray(node.history))node.history=[];
+    const doneEntries=node.history.filter(h=>h.progress>=100).sort((a,b)=>new Date(b.ts)-new Date(a.ts));
+    const isoTs=newDate?new Date(newDate).toISOString():new Date().toISOString();
+    if(doneEntries.length){
+      doneEntries[0].ts=isoTs;
+    } else {
+      node.history.push({ts:isoTs,progress:100,note:'Completed date set manually'});
+    }
+    save();
+  }
+  renderMyTaskTable();
+  toast('Completed date updated');
 }
 function myTaskSetStatus(meetingId,rowIndex,newStatus){
   // Task 1 (Guest Role View-Only Access): status updates were previously
@@ -16567,6 +16692,12 @@ function myTaskSetStatus(meetingId,rowIndex,newStatus){
   if(!m||!m.items||!m.items[rowIndex])return;
   const row=m.items[rowIndex];
   row.status=newStatus;
+  // Task 2 (Completed Date): captured once, the first time a task reaches
+  // Completed — retained afterward even if the status later changes away
+  // and back, per requirement.
+  if(newStatus==='completed'&&!row.completedDate){
+    row.completedDate=new Date().toISOString().slice(0,10);
+  }
   row.remarksLog=row.remarksLog||[];
   const statusLabels={pending:'Pending',inprogress:'In Progress',completed:'Completed'};
   row.remarksLog.push({text:'Status updated to '+(statusLabels[newStatus]||newStatus),dateTime:new Date().toISOString()});

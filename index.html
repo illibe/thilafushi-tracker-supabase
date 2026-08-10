@@ -2368,6 +2368,14 @@ body.readonly .icon-btn.tl-expand-details-btn{pointer-events:auto;opacity:1;}
         </div>
         <div class="ds-mode-cell">Firebase</div>
         <div class="ds-config-cell">
+          <!-- Root-cause fix (Firebase Retired — Split-Brain Data Loss): Firebase
+               is no longer a supported backend (see _dsAutoReconnect,
+               dsFirebaseConnect, fbAuthIsEnabled). Inputs/button disabled below
+               so this card can no longer be used to connect — kept visible only
+               so anyone who previously connected can see it's retired, not gone. -->
+          <div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);border-radius:7px;padding:9px 12px;margin-bottom:12px;font-size:12px;color:var(--red);line-height:1.5">
+            <strong>✕ Firebase has been retired.</strong> Supabase is now the only supported backend — this card is disabled and kept only for reference.
+          </div>
           <p style="font-size:12px;color:var(--muted);margin-bottom:8px">Connect to Firebase Realtime Database for live sync across devices.</p>
           <!-- Field guidance -->
           <div style="background:rgba(0,198,255,.06);border:1px solid rgba(0,198,255,.2);border-radius:7px;padding:9px 12px;margin-bottom:12px;font-size:11px;color:var(--muted);line-height:1.6">
@@ -2378,27 +2386,27 @@ body.readonly .icon-btn.tl-expand-details-btn{pointer-events:auto;opacity:1;}
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
             <div>
               <label style="font-size:11px;color:var(--muted);font-weight:600;display:block;margin-bottom:3px">API Key</label>
-              <input type="text" id="ds-fb-apikey" placeholder="AIza…" style="width:100%;padding:7px 10px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text)">
+              <input type="text" id="ds-fb-apikey" placeholder="AIza…" disabled style="width:100%;padding:7px 10px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);opacity:.5;cursor:not-allowed">
             </div>
             <div>
               <label style="font-size:11px;color:var(--muted);font-weight:600;display:block;margin-bottom:3px">Project ID</label>
-              <input type="text" id="ds-fb-projectid" placeholder="my-project-id" style="width:100%;padding:7px 10px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text)">
+              <input type="text" id="ds-fb-projectid" placeholder="my-project-id" disabled style="width:100%;padding:7px 10px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);opacity:.5;cursor:not-allowed">
             </div>
           </div>
           <div style="margin-bottom:10px">
             <label style="font-size:11px;color:var(--muted);font-weight:600;display:block;margin-bottom:3px">Database URL</label>
-            <input type="url" id="ds-fb-dburl" placeholder="https://my-project-default-rtdb.firebaseio.com" style="width:100%;padding:7px 10px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text)">
+            <input type="url" id="ds-fb-dburl" placeholder="https://my-project-default-rtdb.firebaseio.com" disabled style="width:100%;padding:7px 10px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);opacity:.5;cursor:not-allowed">
           </div>
           <div style="display:flex;gap:8px;align-items:center">
-            <button class="btn btn-primary btn-sm" onclick="dsFirebaseConnect()">🔥 Connect</button>
+            <button class="btn btn-primary btn-sm" onclick="dsFirebaseConnect()" disabled style="opacity:.5;cursor:not-allowed">🔥 Connect (disabled)</button>
             <button class="btn btn-ghost btn-sm" id="ds-fb-disconnect-btn" onclick="dsFirebaseDisconnect()" style="display:none">Disconnect</button>
           </div>
           <div id="ds-firebase-msg" style="margin-top:8px;font-size:12px;color:var(--muted)"></div>
 
           <!-- Firebase Authentication (Email/Password) -->
           <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
-            <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer">
-              <input type="checkbox" id="ds-fb-auth-enabled" onchange="dsToggleFirebaseAuth()" style="margin-top:2px;width:16px;height:16px;accent-color:var(--accent)">
+            <label style="display:flex;align-items:flex-start;gap:10px;cursor:not-allowed;opacity:.5">
+              <input type="checkbox" id="ds-fb-auth-enabled" onchange="dsToggleFirebaseAuth()" disabled style="margin-top:2px;width:16px;height:16px;accent-color:var(--accent)">
               <span>
                 <strong style="font-size:13px">🔐 Use Firebase Authentication for login</strong><br>
                 <span style="font-size:11px;color:var(--muted)">Requires a connected Firebase project (above). When enabled, sign-in uses Firebase Email/Password Authentication instead of the local username/password check. User profiles (Full Name, Email, Role, Department, Status) are read from Realtime Database at <code>users/&lt;uid&gt;</code>; passwords are never stored in the database.</span>
@@ -4384,8 +4392,12 @@ function fbGetSavedConfig(){
   return saved;
 }
 function fbAuthIsEnabled(){
-  const cfg=fbGetSavedConfig();
-  return!!(cfg.authEnabled&&cfg.fb&&cfg.fb.apiKey&&cfg.fb.projectId&&cfg.fb.databaseURL);
+  // Root-cause fix (Firebase Retired — Split-Brain Data Loss): Firebase is
+  // no longer a supported backend (see _dsAutoReconnect and dsFirebaseConnect
+  // below). Forcing this to always return false means login can never route
+  // through Firebase Authentication, even on a device with an old
+  // authEnabled:true saved from before the migration.
+  return false;
 }
 let _fbAuthStateUnsub=null;
 async function fbEnsureAuthApp(){
@@ -4467,18 +4479,14 @@ async function firebaseSignOut(){
   try{if(window.firebase&&window.firebase.auth)await window.firebase.auth().signOut();}catch(e){}
 }
 function dsToggleFirebaseAuth(){
+  // Root-cause fix (Firebase Retired — Split-Brain Data Loss): see
+  // _dsAutoReconnect(). Firebase Authentication can no longer be enabled
+  // from here — fbAuthIsEnabled() would ignore it anyway, but blocking it
+  // here too avoids the checkbox showing a misleading "enabled" state.
   const chk=document.getElementById('ds-fb-auth-enabled');
   const msgEl=document.getElementById('ds-fb-auth-msg');
-  if(chk.checked&&window._DS._fbApp===null){
-    if(msgEl)msgEl.innerHTML='<span style="color:var(--amber)">⚠ Connect Firebase first using the Connect button above.</span>';
-    chk.checked=false;
-    return;
-  }
-  window._DS._persist();
-  if(msgEl)msgEl.innerHTML=chk.checked
-    ?'<span style="color:var(--green)">✓ Firebase Authentication enabled. Make sure Firebase Auth users exist (with matching profiles at <code>users/&lt;uid&gt;</code>) before signing out — local accounts can no longer sign in while this is on.</span>'
-    :'<span style="color:var(--muted)">Firebase Authentication disabled — using local sign-in.</span>';
-  toast(chk.checked?'Firebase Authentication enabled':'Firebase Authentication disabled');
+  chk.checked=false;
+  if(msgEl)msgEl.innerHTML='<span style="color:var(--red)">✕ Firebase has been retired. Supabase is now the only supported backend.</span>';
 }
 
 async function doLogin(){
@@ -8807,6 +8815,7 @@ window._DS={
   _serialize(appData){
     return{
       modules:appData.nodes||[],
+      deletedNodes:loadDeletedNodesTombstone(),
       features:Object.assign({},...Object.entries(featuresMap).map(([k,v])=>({[k]:v}))),
       users:loadUsers(),
       // Root-cause fix (Deleted User Reappearing): sync the deletion
@@ -9126,6 +9135,15 @@ async function dsSheetSync(){
 
 // ── Firebase ──────────────────────────────────────────
 async function dsFirebaseConnect(){
+  // Root-cause fix (Firebase Retired — Split-Brain Data Loss): Firebase is
+  // no longer a supported backend — see the matching note in
+  // _dsAutoReconnect(). Blocking the manual Connect button too, so no
+  // device can establish a Firebase connection through any path.
+  const msgEl=document.getElementById('ds-firebase-msg');
+  if(msgEl)msgEl.innerHTML='<span style="color:var(--red)">✕ Firebase has been retired. Supabase is now the only supported backend.</span>';
+  return;
+}
+async function _dsFirebaseConnect_DISABLED(){
   const apiKey=document.getElementById('ds-fb-apikey').value.trim();
   const projectId=document.getElementById('ds-fb-projectid').value.trim();
   const databaseURL=document.getElementById('ds-fb-dburl').value.trim();
@@ -9327,7 +9345,8 @@ async function _dsFirebaseConnectCore(apiKey,projectId,databaseURL,opts){
         // pulled down from Firebase. Fixed to match the key _serialize()
         // really writes (same key the Supabase sync path already reads).
         if(val.modules){
-          data=Object.assign({},data,{nodes:_normalizeNodeTree(val.modules)});
+          mergeIncomingNodeTombstones(val.deletedNodes);
+          data=Object.assign({},data,{nodes:_dsMergeIncomingNodes(val.modules)});
           localStorage.setItem(STORE_KEY,JSON.stringify(data)); // keep localStorage in sync
           changed=true;
         }
@@ -9415,7 +9434,8 @@ async function _dsFirebaseConnectCore(apiKey,projectId,databaseURL,opts){
       window._DS._applyingRemote=true;
       try{
         if(_fbExistingVal.modules){
-          data=Object.assign({},data,{nodes:_normalizeNodeTree(_fbExistingVal.modules)});
+          mergeIncomingNodeTombstones(_fbExistingVal.deletedNodes);
+          data=Object.assign({},data,{nodes:_dsMergeIncomingNodes(_fbExistingVal.modules)});
           localStorage.setItem(STORE_KEY,JSON.stringify(data));
         }
         if(_fbExistingVal.users){mergeIncomingTombstones(_fbExistingVal.deletedUsers);saveUsers(_dsMergeIncomingUsers(_fbExistingVal.users));}
@@ -9637,7 +9657,8 @@ async function _dsSupabaseConnectCore(url,anonKey,opts){
           window._DS._applyingRemote=true;
           try{
             if(val.modules){
-              data=Object.assign({},data,{nodes:_normalizeNodeTree(val.modules)});
+              mergeIncomingNodeTombstones(val.deletedNodes);
+              data=Object.assign({},data,{nodes:_dsMergeIncomingNodes(val.modules)});
               localStorage.setItem(STORE_KEY,JSON.stringify(data));
               changed=true;
             }
@@ -9680,7 +9701,8 @@ async function _dsSupabaseConnectCore(url,anonKey,opts){
 
     // ── Seed data: pull existing row if present, else push current state ──
     if(existingPayload&&existingPayload.modules){
-      data=Object.assign({},data,{nodes:_normalizeNodeTree(existingPayload.modules)});
+      mergeIncomingNodeTombstones(existingPayload.deletedNodes);
+      data=Object.assign({},data,{nodes:_dsMergeIncomingNodes(existingPayload.modules)});
       localStorage.setItem(STORE_KEY,JSON.stringify(data));
       // Root-cause fix (Duplicate Node ID repair): see matching comment in the
       // realtime handler below — same repair, applied on initial load too, since
@@ -9750,7 +9772,20 @@ async function _dsAutoReconnect(){
   try{
     const cfg=JSON.parse(localStorage.getItem(DS_CFG_KEY)||'{}');
 
-    if(cfg.type==='firebase'&&cfg.fb&&cfg.fb.apiKey){
+    // Root-cause fix (Firebase Retired — Split-Brain Data Loss): Firebase is
+    // no longer a supported backend. Previously, any device with an old
+    // cfg.type==='firebase' saved in ITS OWN localStorage from before the
+    // Supabase migration would silently reconnect to Firebase here on every
+    // boot — invisibly diverging from Supabase (the source of truth every
+    // other device uses) with no error or indicator anywhere. Data added on
+    // that device never reached Supabase (looked like data loss to everyone
+    // else); if that device was later pointed at Supabase, its
+    // Firebase-shaped local cache could merge back in looking corrupted
+    // (matches the delayed/orphaned reappearance reported). This branch is
+    // now dead code — every device always goes straight to Supabase below,
+    // regardless of what's saved locally, so this scenario can never
+    // recur on any device, old or new.
+    if(false&&cfg.type==='firebase'&&cfg.fb&&cfg.fb.apiKey){
       await _dsFirebaseConnectCore(cfg.fb.apiKey,cfg.fb.projectId,cfg.fb.databaseURL,{silent:true,isAutoReconnect:true});
       return;
     }
@@ -11266,6 +11301,123 @@ function _normalizeNodeTree(nodes){
     _normalizeNodeTree(n.children);
   });
   return nodes;
+}
+// Root-cause fix (Project/Task/Sub Task Data Loss & Orphaned Sub Tasks):
+// every incoming Firebase/Supabase snapshot for the project tree ("modules")
+// was applied with a blind, unconditional overwrite —
+// `data.nodes = <whatever the snapshot contains>` — completely replacing
+// the in-memory/local tree, with no protection for anything just added
+// locally that the snapshot doesn't yet reflect. addNode's push to
+// Supabase/Firebase happens synchronously as part of save(), but the
+// snapshot that arrives back (this device's own realtime echo, another
+// tab's reconnect, or another device's stale pull-then-push) is not
+// guaranteed to already include it. When a lagging snapshot won that race,
+// a just-added Task or Sub Task vanished from local storage the moment it
+// was applied — matching "entered data disappeared". If a DIFFERENT
+// session had that same node cached locally (e.g. it had synced down
+// before being wiped elsewhere) and later saved anything at all, its own
+// full-tree push resurrected the node — but reattached wherever that
+// session's stale local copy happened to have it, which for a Sub Task
+// whose Task-level parent never made it into that copy meant landing
+// directly under the Job/Phase instead — matching "reappeared as a
+// Sub Task without a parent Task". This mirrors the exact race already
+// fixed for Users/Teams via their _dsMergeIncoming... helpers; the project
+// tree never received the equivalent protection. Applying the same
+// merge-by-id + deletion-tombstone pattern here, extended to walk the
+// hierarchy: any locally-known node missing from an incoming snapshot is
+// kept — together with its own local subtree, so a Task and its Sub Tasks
+// are never split apart — re-attached under its correct local parent
+// (which may itself be a node this same merge just preserved), unless it
+// was actually deleted (see confirmDelete/recordDeletedNodeTombstones).
+const DELETED_NODES_KEY='b2_deleted_nodes_v1';
+function loadDeletedNodesTombstone(){
+  try{
+    const raw=JSON.parse(localStorage.getItem(DELETED_NODES_KEY))||{};
+    const cutoff=Date.now()-48*60*60*1000;
+    let changed=false;
+    Object.keys(raw).forEach(id=>{
+      if(new Date(raw[id]).getTime()<cutoff){delete raw[id];changed=true;}
+    });
+    if(changed)localStorage.setItem(DELETED_NODES_KEY,JSON.stringify(raw));
+    return raw;
+  }catch(e){return{};}
+}
+// Records a tombstone for the deleted node AND every descendant id in its
+// subtree, so the merge below can never resurrect any part of a deleted
+// Project/Phase/Task/Sub Task branch.
+function recordDeletedNodeSubtreeTombstones(node){
+  try{
+    const raw=loadDeletedNodesTombstone();
+    const ts=new Date().toISOString();
+    (function walk(n){
+      raw[n.id]=ts;
+      (n.children||[]).forEach(walk);
+    })(node);
+    localStorage.setItem(DELETED_NODES_KEY,JSON.stringify(raw));
+  }catch(e){}
+}
+function mergeIncomingNodeTombstones(remoteDeleted){
+  if(!remoteDeleted||typeof remoteDeleted!=='object')return;
+  try{
+    const local=loadDeletedNodesTombstone();
+    let changed=false;
+    Object.keys(remoteDeleted).forEach(id=>{
+      if(!local[id]||new Date(remoteDeleted[id])>new Date(local[id])){
+        local[id]=remoteDeleted[id];
+        changed=true;
+      }
+    });
+    if(changed)localStorage.setItem(DELETED_NODES_KEY,JSON.stringify(local));
+  }catch(e){}
+}
+// Merges an incoming remote node tree with the current local tree: any
+// local node (and its full local subtree) that the remote snapshot doesn't
+// yet contain is preserved, reattached under its correct local parent —
+// unless it's tombstoned as deleted. Nodes present in both keep the
+// remote's version (remote is authoritative once synced).
+function _dsMergeIncomingNodes(remoteNodes){
+  const remote=_normalizeNodeTree(JSON.parse(JSON.stringify(Array.isArray(remoteNodes)?remoteNodes:Object.values(remoteNodes||{}))));
+  const remoteById=new Map();
+  (function index(list){(list||[]).forEach(n=>{remoteById.set(n.id,n);index(n.children);});})(remote);
+  const tombstones=loadDeletedNodesTombstone();
+  const local=(data&&Array.isArray(data.nodes))?data.nodes:[];
+  function localParentOf(id,list,parent){
+    for(const n of list){
+      if(n.id===id)return parent;
+      const r=localParentOf(id,n.children||[],n);
+      if(r!==undefined)return r;
+    }
+    return undefined;
+  }
+  (function walkLocal(list){
+    (list||[]).forEach(n=>{
+      if(tombstones[n.id])return; // deliberately deleted — never resurrect
+      if(remoteById.has(n.id)){
+        walkLocal(n.children||[]); // exists remotely; still check its children for local-only additions
+        return;
+      }
+      // Missing from remote: preserve this node together with its whole
+      // local subtree (its children, if also missing remotely, are already
+      // nested inside via the deep clone below — no need to walk them separately).
+      const clone=JSON.parse(JSON.stringify(n));
+      const parent=localParentOf(n.id,local,null);
+      if(parent&&remoteById.has(parent.id)){
+        const remoteParent=remoteById.get(parent.id);
+        if(!remoteParent.children)remoteParent.children=[];
+        remoteParent.children.push(clone);
+      } else if(!parent){
+        remote.push(clone);
+      } else {
+        // Parent is also local-only and missing from remote — it will carry
+        // this node's whole subtree along when it is itself processed
+        // (parents always appear before their children in tree order), so
+        // nothing further to do here.
+        return;
+      }
+      (function index(list){(list||[]).forEach(c=>{remoteById.set(c.id,c);index(c.children);});})([clone]);
+    });
+  })(local);
+  return remote;
 }
 // Task Fix (Phase Missing Children / No Expand-Collapse): some records were
 // stored with descendants (e.g. a Phase's Jobs) sitting as flat SIBLINGS in
@@ -16058,6 +16210,9 @@ function confirmDelete(){
     }
   }
   removeNode(pendingDeleteId,data.nodes);
+  // Root-cause fix (Orphaned Sub Tasks): tombstone the whole deleted subtree
+  // so _dsMergeIncomingNodes can never resurrect it from a stale local/remote copy.
+  if(node)recordDeletedNodeSubtreeTombstones(node);
   if(selectedId===pendingDeleteId)selectedId=null;
   save();render();updateStats();renderFeatures();closeConfirm();
   toast(deletedActivityCount?`Deleted (${deletedActivityCount} linked Activit${deletedActivityCount===1?'y':'ies'} also removed)`:'Deleted');

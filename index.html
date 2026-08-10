@@ -71,7 +71,8 @@ header{background:var(--header-bg);border-bottom:1px solid var(--header-border);
 .page-content{flex:1;overflow:hidden;display:flex;flex-direction:column;min-width:0;}
 /* STATS BAR */
 .stats-bar{display:flex;gap:1px;background:var(--stat-bar-gap);border-bottom:1px solid var(--border);flex-shrink:0;}
-.stat-item{flex:1;background:var(--surface);padding:10px 16px;display:flex;flex-direction:column;gap:3px;cursor:default;}
+.stat-item{flex:0.85;background:var(--surface);padding:2px 16px;display:flex;flex-direction:column;gap:0;cursor:default;}
+#stat-milestone-item{flex:1.6;}
 .stat-item.clickable{cursor:pointer;transition:var(--transition);}
 .stat-item.clickable:hover{background:var(--surface2);}
 .stat-label{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:500;}
@@ -13582,13 +13583,32 @@ function arFindTaskByCode(phase,code){
 // Overall Progress: reuses the existing calcProgress() aggregation already
 // used everywhere else in the tree/timeline rather than reimplementing it.
 function arOverallProgress(phase){ return calcProgress(phase); }
-// Current Stage: first Job (in tree order) that isn't 100% complete;
-// "Completed" once every Job is done; "—" if the Phase has no Jobs yet.
+// Task 2.2 (Readiness Page — Current Stage fix): now shows the most
+// recently completed Sub Task (level 3) across the Project's Tasks, rather
+// than the first incomplete Task. Completion time is derived the same way
+// as the My Task page's Completed Date for Task/Sub Task rows — the latest
+// node.history entry that reached 100% — reusing that existing mechanism
+// instead of adding a new field. "—" (existing empty-state) when there are
+// no completed Sub Tasks, same as the prior "no Jobs yet" case.
 function arCurrentStage(phase){
   const jobs=(phase.children||[]).filter(c=>(c.level||0)===2);
-  if(!jobs.length)return'—';
-  const active=jobs.find(j=>calcProgress(j)<100);
-  return active?active.name:'Completed';
+  const subtasks=[];
+  jobs.forEach(j=>(j.children||[]).filter(c=>(c.level||0)===3).forEach(st=>subtasks.push(st)));
+  const completed=subtasks.filter(st=>calcProgress(st)===100);
+  if(!completed.length)return'—';
+  function completedTs(st){
+    if(!Array.isArray(st.history))return null;
+    const done=st.history.filter(h=>h.progress>=100).sort((a,b)=>new Date(b.ts)-new Date(a.ts))[0];
+    return done?done.ts:null;
+  }
+  completed.sort((a,b)=>{
+    const ta=completedTs(a),tb=completedTs(b);
+    if(ta&&tb)return new Date(tb)-new Date(ta);
+    if(ta)return -1;
+    if(tb)return 1;
+    return 0;
+  });
+  return completed[0].name;
 }
 // Budget Approval Status — Business Rule from Task 2.
 function arBudgetApprovalStatus(phase){
@@ -13738,19 +13758,15 @@ function renderAssetInformationTable(){
       <th style="padding:8px 10px;border-bottom:1px solid var(--border)">#</th>
       <th style="padding:8px 10px;border-bottom:1px solid var(--border)">Asset Name</th>
       <th style="padding:8px 10px;border-bottom:1px solid var(--border)">Execution Mode</th>
-      <th style="padding:8px 10px;border-bottom:1px solid var(--border)">Status</th>
       <th style="padding:8px 10px;border-bottom:1px solid var(--border)">Qty</th>
       <th style="padding:8px 10px;border-bottom:1px solid var(--border)">Priority</th>
       <th style="padding:8px 10px;border-bottom:1px solid var(--border)">Budget</th>
       <th style="padding:8px 10px;border-bottom:1px solid var(--border)">Initiate Date</th>
-      <th style="padding:8px 10px;border-bottom:1px solid var(--border)">Required Date</th>
-      <th style="padding:8px 10px;border-bottom:1px solid var(--border)">Responsible Team</th>
+      <th style="padding:8px 10px;border-bottom:1px solid var(--border)">Due Date</th>
       <th style="padding:8px 10px;border-bottom:1px solid var(--border)">Overall Progress</th>
-      <th style="padding:8px 10px;border-bottom:1px solid var(--border)">Budget Approval</th>
       <th style="padding:8px 10px;border-bottom:1px solid var(--border)">Current Stage</th>
       <th style="padding:8px 10px;border-bottom:1px solid var(--border)">Health</th>
       <th style="padding:8px 10px;border-bottom:1px solid var(--border)">Risk</th>
-      <th style="padding:8px 10px;border-bottom:1px solid var(--border)">Readiness Status</th>
     </tr></thead>
     <tbody>${rows.map((r,i)=>{
       const p=r.phase,task=r.task;
@@ -13762,19 +13778,15 @@ function renderAssetInformationTable(){
         <td style="padding:8px 10px;color:var(--muted)">${i+1}</td>
         <td style="padding:8px 10px;font-weight:600">${eH(task.name)}</td>
         <td style="padding:8px 10px">${eH(p.executionMode||'—')}</td>
-        <td style="padding:8px 10px">${arPill(statusLabel,statusTone)}</td>
         <td style="padding:8px 10px">${task.qty!==undefined&&task.qty!==null&&task.qty!==''?eH(String(task.qty)):'0'}</td>
         <td style="padding:8px 10px">${p.priority?eH(p.priority):'—'}</td>
         <td style="padding:8px 10px">${task.budget!==undefined&&task.budget!==null&&task.budget!==''?eH(String(task.budget)):'0'}</td>
-        <td style="padding:8px 10px">${fmt(p.startDate)}</td>
-        <td style="padding:8px 10px">${fmt(p.endDate)}</td>
-        <td style="padding:8px 10px">${eH(teamNames(p))}</td>
+        <td style="padding:8px 10px">${fmt(task.startDate)}</td>
+        <td style="padding:8px 10px">${fmt(task.endDate)}</td>
         <td style="padding:8px 10px">${pct}%</td>
-        <td style="padding:8px 10px">${arPill(arBudgetApprovalStatus(p),arBudgetTone(arBudgetApprovalStatus(p)))}</td>
         <td style="padding:8px 10px">${eH(arCurrentStage(p))}</td>
         <td style="padding:8px 10px">${arPill(arHealth(p),arHealthTone(arHealth(p)))}</td>
         <td style="padding:8px 10px">${arPill(arRisk(p),arRiskTone(arRisk(p)))}</td>
-        <td style="padding:8px 10px">${arPill(arReadinessStatus(p),arReadinessTone(arReadinessStatus(p)))}</td>
       </tr>`;}).join('')}
     </tbody>
   </table>`;

@@ -73,8 +73,8 @@ header{background:var(--header-bg);border-bottom:1px solid var(--header-border);
 .page-content{flex:1;overflow:hidden;display:flex;flex-direction:column;min-width:0;}
 /* STATS BAR */
 .stats-bar{display:flex;gap:1px;background:var(--stat-bar-gap);border-bottom:1px solid var(--border);flex-shrink:0;}
-.stat-item{flex:0.85;background:var(--surface);padding:2px 16px;display:flex;flex-direction:column;gap:0;cursor:default;}
-#stat-milestone-item{flex:1.6;}
+.stat-item{flex:0.7;background:var(--surface);padding:2px 16px;display:flex;flex-direction:column;gap:0;cursor:default;}
+#stat-milestone-item,#stat-milestone2-item{flex:1.6;}
 .stat-item.clickable{cursor:pointer;transition:var(--transition);}
 .stat-item.clickable:hover{background:var(--surface2);}
 .stat-label{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:500;}
@@ -977,6 +977,16 @@ body.readonly .icon-btn.tl-expand-details-btn{pointer-events:auto;opacity:1;}
     <span class="stat-label" style="margin-top:2px">Milestone Countdown</span>
     <span class="stat-value" id="stat-milestone-countdown" style="font-size:15px;color:var(--accent);line-height:1.3;font-variant-numeric:tabular-nums"></span>
   </div>
+  <!-- Task 1 (KPI Bar — Second Milestone KPI): same design/markup/CSS
+       classes as the Milestone KPI above, wired to the NEXT upcoming
+       milestone (see getSecondMilestone()) rather than duplicating the
+       first KPI's content. -->
+  <div class="stat-item clickable" onclick="showPage('milestones')" title="View Milestones" id="stat-milestone2-item">
+    <span class="stat-label">🎯 Next Milestone</span>
+    <span class="stat-value" id="stat-milestone2-heading" style="font-size:12px;font-weight:700;color:var(--text);line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px">No Active Milestone</span>
+    <span class="stat-label" style="margin-top:2px">Milestone Countdown</span>
+    <span class="stat-value" id="stat-milestone2-countdown" style="font-size:15px;color:var(--accent);line-height:1.3;font-variant-numeric:tabular-nums"></span>
+  </div>
 </div>
 
 <!-- ═══ TRACKER PAGE ═══ -->
@@ -1363,23 +1373,21 @@ body.readonly .icon-btn.tl-expand-details-btn{pointer-events:auto;opacity:1;}
       <span id="mytask-count" style="font-size:11px;color:var(--muted)"></span>
     </div>
     <div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px;background:var(--surface)">
-      <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:1080px">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:1200px">
         <thead>
           <tr style="background:var(--surface2)">
-            <th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:70px">Task No.</th>
-            <th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:80px">Source</th>
             <th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:100px">Meeting No.</th>
             <th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:100px">Meeting Date</th>
-            <th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border)">Task Name</th>
+            <th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);min-width:260px">Task Name</th>
             <th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:100px">Due Date</th>
             <th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:110px">Assigned To</th>
-            <th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:120px">Status</th>
+            <th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:140px">Status</th>
             <th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:100px">Completed Date</th>
             <th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:100px">Total Due (Days)</th>
             <th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:340px">Status Remarks</th>
           </tr>
         </thead>
-        <tbody id="mytask-tbody"><tr><td colspan="11" style="padding:20px;text-align:center;color:var(--muted2)">No tasks assigned yet.</td></tr></tbody>
+        <tbody id="mytask-tbody"><tr><td colspan="9" style="padding:20px;text-align:center;color:var(--muted2)">No tasks assigned yet.</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -7902,6 +7910,7 @@ function renderDashboard(){
   if(msAddBtn)msAddBtn.style.display=canRoadmapCreate()?'':'none';
   // Task 2: keep the Milestone Countdown KPI fresh whenever Dashboard renders
   updateMilestoneCountdown();
+  updateMilestoneCountdown2(); // Task 1 (KPI Bar): keep the second Milestone KPI in sync too
 
   // ── Projects Dashboard Widget (Task 1 — replaces Productivity Team) ───
   renderDashboardProjectsWidget();
@@ -8548,6 +8557,67 @@ function tickMilestoneCountdown(){
   const secs=Math.floor((diff/1000)%60);
   countdownEl.textContent=days+'d '+pad(hours)+'h '+pad(mins)+'m '+pad(secs)+'s';
 }
+// Task 1 (KPI Bar — Second Milestone KPI): mirrors getActiveMilestone()'s
+// exact "nearest upcoming milestone" sort, but returns the SECOND nearest
+// instead of the first, so the new KPI slot shows the next milestone in
+// the queue rather than duplicating the first KPI's content. Left as a
+// separate function (rather than parameterizing getActiveMilestone) so
+// the existing, already-relied-upon function is not touched at all.
+function getSecondMilestone(){
+  const list=loadMilestones();
+  if(!list.length)return null;
+  const now=new Date();
+  const withEnd=list.map(ms=>({ms,end:ms.endDate||msComputeEndDate(ms.period||'quarter',ms.quarter,ms.month,ms.year)}));
+  const upcoming=withEnd.filter(x=>new Date(x.end+'T23:59:59')>=now).sort((a,b)=>new Date(a.end)-new Date(b.end));
+  return upcoming.length>1?upcoming[1]:null;
+}
+let _milestoneCountdownInterval2=null;
+// Same design and functionality as updateMilestoneCountdown()/
+// tickMilestoneCountdown() above, duplicated for the second KPI slot's own
+// element ids and its own countdown interval (so the two tickers don't
+// interfere with each other).
+function updateMilestoneCountdown2(){
+  const headingEl=document.getElementById('stat-milestone2-heading');
+  const countdownEl=document.getElementById('stat-milestone2-countdown');
+  if(!headingEl||!countdownEl)return;
+  const active=getSecondMilestone();
+  if(_milestoneCountdownInterval2){clearInterval(_milestoneCountdownInterval2);_milestoneCountdownInterval2=null;}
+  if(!active){
+    headingEl.textContent='No Active Milestone';
+    headingEl.removeAttribute('title');
+    headingEl.style.color='var(--text)';
+    countdownEl.textContent='';
+    return;
+  }
+  const heading=active.ms.heading||'Milestone';
+  const periodShort=msPeriodShort(active.ms);
+  headingEl.textContent=heading+' — '+periodShort;
+  headingEl.title=heading+' — '+msPeriodLabel(active.ms);
+  headingEl.style.color=active.ms.color||'var(--text)';
+  tickMilestoneCountdown2();
+  _milestoneCountdownInterval2=setInterval(tickMilestoneCountdown2,1000);
+}
+function tickMilestoneCountdown2(){
+  const countdownEl=document.getElementById('stat-milestone2-countdown');
+  if(!countdownEl)return;
+  const active=getSecondMilestone();
+  if(!active){countdownEl.textContent='';return;}
+  const target=new Date(active.end+'T23:59:59');
+  const now=new Date();
+  const diff=target-now;
+  if(diff<=0){
+    countdownEl.textContent='Project Milestone Achieved';
+    if(_milestoneCountdownInterval2){clearInterval(_milestoneCountdownInterval2);_milestoneCountdownInterval2=null;}
+    updateMilestoneCountdown2(); // re-evaluate in case another milestone is now the second-nearest
+    return;
+  }
+  const pad2=n=>String(n).padStart(2,'0');
+  const days2=Math.floor(diff/(1000*60*60*24));
+  const hours2=Math.floor((diff/(1000*60*60))%24);
+  const mins2=Math.floor((diff/(1000*60))%60);
+  const secs2=Math.floor((diff/1000)%60);
+  countdownEl.textContent=days2+'d '+pad2(hours2)+'h '+pad2(mins2)+'m '+pad2(secs2)+'s';
+}
 function msTogglePeriodFields(){
   const period=document.getElementById('ms-period').value;
   document.getElementById('ms-quarter-fields').style.display=period==='month'?'none':'flex';
@@ -8633,6 +8703,7 @@ function saveMilestone(){
   if(document.getElementById('page-dashboard').classList.contains('active'))renderDashboard();
   if(document.getElementById('page-milestones').classList.contains('active'))renderMilestonesPage();
   updateMilestoneCountdown();
+  updateMilestoneCountdown2(); // Task 1 (KPI Bar): keep the second Milestone KPI in sync too
 }
 function deleteMilestone(id){
   const arr=loadMilestones().filter(m=>m.id!==id);
@@ -13447,6 +13518,84 @@ function nodeLastCompletedSubTaskName(taskNode){
   });
   return completed[0].name;
 }
+// Task 2 (Task Ribbon — Long Name Truncation): if the next pending Sub
+// Task's name is too long for the ribbon, cut it to roughly half its own
+// length and append "…", e.g. "Levelling & Paving (Area behind the…" for a
+// longer original name — instead of letting it overflow/wrap the ribbon.
+const RIBBON_NAME_TOO_LONG=30;
+function truncateRibbonName(name){
+  if(!name||name.length<=RIBBON_NAME_TOO_LONG)return name;
+  const half=Math.ceil(name.length/2);
+  return name.slice(0,half)+'...';
+}
+// Task 1 (Task Ribbon Redesign — Progress/Next): builds the Task Ribbon's
+// two value-only text segments:
+//   1. Sub Task completion count "completed/total".
+//   2. The next PENDING Sub Task — the first one in sequence (existing
+//      child order, same order used everywhere else incl. drag-reorder)
+//      that isn't yet at 100%, regardless of what's completed after it.
+//      Always shown, independent of whether a delay is also shown.
+// The delay value itself is no longer part of this text list — see
+// nodeTaskDelayInfo() below, rendered separately as a colored badge.
+function nodeTaskRibbonParts(taskNode){
+  const parts=[];
+  const subtasks=(taskNode.children||[]).filter(c=>(c.level||0)===3);
+  if(subtasks.length){
+    const completedCount=subtasks.filter(st=>calcProgress(st)===100).length;
+    parts.push(`${completedCount}/${subtasks.length}`);
+  }
+  const nextPending=subtasks.find(st=>calcProgress(st)!==100);
+  if(nextPending)parts.push(truncateRibbonName(nextPending.name));
+  return parts;
+}
+// Task 1 (Task Ribbon Redesign — Delay Badge): same delay calculation and
+// Task-over-Subtask priority as before, just returned as structured data
+// {level,days} instead of a captioned string, so the caller can render it
+// as a colored badge (red = Task Delay, orange/amber = Subtask Delay)
+// instead of "Task Delay (X days)" / "Subtask Delay (X days)" text. Returns
+// null when there's no delay at either level.
+function nodeTaskDelayInfo(taskNode){
+  const subtasks=(taskNode.children||[]).filter(c=>(c.level||0)===3);
+  const nextPending=subtasks.find(st=>calcProgress(st)!==100);
+  function daysLate(endDateStr){
+    if(!endDateStr)return 0;
+    const end=new Date(endDateStr);
+    const today=new Date();
+    const endDay=new Date(end.getFullYear(),end.getMonth(),end.getDate());
+    const todayDay=new Date(today.getFullYear(),today.getMonth(),today.getDate());
+    return Math.round((todayDay-endDay)/86400000);
+  }
+  const taskLateDays=daysLate(taskNode.endDate);
+  if(taskNode.endDate&&taskLateDays>0){
+    return{level:'task',days:taskLateDays};
+  }
+  if(nextPending&&nextPending.endDate){
+    const subLateDays=daysLate(nextPending.endDate);
+    if(subLateDays>0)return{level:'subtask',days:subLateDays};
+  }
+  return null;
+}
+// Task 2 (Project Ribbon): Project (level 1) rows' ribbon text — Total
+// Tasks (completed/total immediate Task children) plus, only when the
+// Project's own End Date has passed, its total delay in days. No delay
+// value at all when the Project isn't delayed.
+function nodeProjectRibbonParts(projectNode){
+  const parts=[];
+  const tasks=(projectNode.children||[]).filter(c=>(c.level||0)===2);
+  if(tasks.length){
+    const completedCount=tasks.filter(t=>calcProgress(t)===100).length;
+    parts.push(`Total Tasks: ${completedCount}/${tasks.length}`);
+  }
+  if(projectNode.endDate){
+    const end=new Date(projectNode.endDate);
+    const today=new Date();
+    const endDay=new Date(end.getFullYear(),end.getMonth(),end.getDate());
+    const todayDay=new Date(today.getFullYear(),today.getMonth(),today.getDate());
+    const lateDays=Math.round((todayDay-endDay)/86400000);
+    if(lateDays>0)parts.push(`Delay (${lateDays}d)`);
+  }
+  return parts;
+}
 function renderNode(node){
   const lvl=node.level||0;
   const prog=calcProgress(node);
@@ -13490,32 +13639,67 @@ function renderNode(node){
   // the value itself stays highlighted in yellow as before.
   lbl.innerHTML=hasNosQty?`${eH(node.name)} <span style="color:#facc15;font-weight:600">(Qty: ${eH(String(node.nosQty))})</span>`:eH(node.name);
   row.appendChild(lbl);
-  // Date display for Project (level 0) and Phase (level 1)
-  if((lvl===0||lvl===1)&&(node.startDate||node.endDate)){
+  // Date display for Program (level 0) — unchanged from before.
+  if(lvl===0&&(node.startDate||node.endDate)){
     const dateLbl=document.createElement('div');
     dateLbl.style.cssText='font-size:10px;color:rgba(255,255,255,0.6);white-space:nowrap;margin-right:8px;flex-shrink:0;';
     const fmt=d=>d?new Date(d).toLocaleDateString('en-GB',{day:'2-digit',month:'2-digit',year:'2-digit'}):'—';
     dateLbl.textContent=`${fmt(node.startDate)} → ${fmt(node.endDate)}`;
     row.appendChild(dateLbl);
   }
-  // Task 2 & 3 (Task Ribbon info): Current Status (last completed Sub Task)
-  // plus Start/Due dates, Task (level 2) rows only. Date segment now matches
-  // the same label-free "start → end" format already used by the
-  // Program/Project date display above, per requirement. Uses
-  // var(--lvl2-info-color) — black in Light Mode, var(--muted) in Dark Mode
-  // (unchanged) — rather than the lvl0/1 block's hardcoded white, since the
-  // Task ribbon has a light background in both themes.
+  // Task 2 (Project Ribbon): Project (level 1) rows — same date-range
+  // display previously shared with Program (level 0) rows, now also
+  // carrying Total Tasks (completed/total) and, when applicable, the
+  // Project's own delay. See nodeProjectRibbonParts().
+  // Task 1 (Project Ribbon — Reorder): Total Tasks (and Project delay, when
+  // applicable) now come BEFORE the date range instead of after it — see
+  // nodeProjectRibbonParts().
+  if(lvl===1){
+    const projInfoParts=[];
+    nodeProjectRibbonParts(node).forEach(p=>projInfoParts.push(eH(p)));
+    const fmtP=d=>d?new Date(d).toLocaleDateString('en-GB',{day:'2-digit',month:'2-digit',year:'2-digit'}):'—';
+    if(node.startDate||node.endDate)projInfoParts.push(`${fmtP(node.startDate)} → ${fmtP(node.endDate)}`);
+    if(projInfoParts.length){
+      const projInfoLbl=document.createElement('div');
+      projInfoLbl.style.cssText='font-size:10px;color:rgba(255,255,255,0.6);white-space:nowrap;margin-right:8px;flex-shrink:0;';
+      projInfoLbl.textContent=projInfoParts.join(' | ');
+      row.appendChild(projInfoLbl);
+    }
+  }
+  // Task 2 & 3 (Task Ribbon info): Sub Task progress/next Sub Task text
+  // plus Start/Due dates, Task (level 2) rows only. Date segment matches
+  // the same label-free "start → end" format used by the Program/Project
+  // date display above. Uses var(--lvl2-info-color) — black in Light Mode,
+  // var(--muted) in Dark Mode (unchanged) — rather than the lvl0/1 block's
+  // hardcoded white, since the Task ribbon has a light background in both
+  // themes. Task 1 (Delay Badge Redesign): the delay value (when present)
+  // is now a colored .node-badge — the same badge style/class already
+  // used for the % indicator — instead of captioned "Task Delay (X days)"
+  // / "Subtask Delay (X days)" text: red (badge-red) for a Task-level
+  // delay, orange/amber (badge-amber) for a Sub Task-level delay. Calc and
+  // priority (Task over Sub Task) are unchanged — see nodeTaskDelayInfo().
   if(lvl===2){
     const taskInfoParts=[];
-    const lastCompletedName=nodeLastCompletedSubTaskName(node);
-    if(lastCompletedName)taskInfoParts.push(`Status: ${eH(lastCompletedName)}`);
+    nodeTaskRibbonParts(node).forEach(p=>taskInfoParts.push(eH(p)));
     const fmt2=d=>d?new Date(d).toLocaleDateString('en-GB',{day:'2-digit',month:'2-digit',year:'2-digit'}):'—';
     if(node.startDate||node.endDate)taskInfoParts.push(`${fmt2(node.startDate)} → ${fmt2(node.endDate)}`);
-    if(taskInfoParts.length){
-      const taskInfoLbl=document.createElement('div');
-      taskInfoLbl.style.cssText='font-size:10px;color:var(--lvl2-info-color);white-space:nowrap;margin-right:8px;flex-shrink:0;';
-      taskInfoLbl.textContent=taskInfoParts.join(' | ');
-      row.appendChild(taskInfoLbl);
+    const delayInfo=nodeTaskDelayInfo(node);
+    if(taskInfoParts.length||delayInfo){
+      const taskInfoWrap=document.createElement('div');
+      taskInfoWrap.style.cssText='display:flex;align-items:center;gap:6px;margin-right:8px;flex-shrink:0;';
+      if(taskInfoParts.length){
+        const taskInfoLbl=document.createElement('span');
+        taskInfoLbl.style.cssText='font-size:10px;color:var(--lvl2-info-color);white-space:nowrap;';
+        taskInfoLbl.textContent=taskInfoParts.join(' | ');
+        taskInfoWrap.appendChild(taskInfoLbl);
+      }
+      if(delayInfo){
+        const delayBadge=document.createElement('span');
+        delayBadge.className=`node-badge ${delayInfo.level==='task'?'badge-red':'badge-amber'}`;
+        delayBadge.textContent=`Delay (${delayInfo.days}d)`;
+        taskInfoWrap.appendChild(delayBadge);
+      }
+      row.appendChild(taskInfoWrap);
     }
   }
   if(!isTask){const pb=document.createElement('div');pb.className='node-progress-bar';pb.innerHTML=`<div class="node-progress-fill" style="width:${prog}%;background:${progressColor(prog)}"></div>`;row.appendChild(pb);}
@@ -13913,6 +14097,7 @@ function updateStats(){
   document.getElementById('stat-done').textContent=mtgTaskDone+' / '+mtgTaskTotal;
   // Task 2: Milestone Countdown KPI (replaces Top Performer)
   updateMilestoneCountdown();
+  updateMilestoneCountdown2(); // Task 1 (KPI Bar): keep the second Milestone KPI in sync too
 }
 
 // ══════════════════════════════════════════════════════
@@ -15834,20 +16019,36 @@ function _phaseDateCheck(){
   if(startDate&&endDate&&endDate<startDate){
     return{valid:false,message:'End Date cannot be earlier than Start Date.'};
   }
-  if(lvl!==1)return{valid:true};
-  const parentProject=modalMode==='add'?findNode(modalParentId,data.nodes):findParent(modalEditId,data.nodes,null);
-  if(parentProject){
-    if(parentProject.startDate&&startDate&&startDate<parentProject.startDate){
-      return{valid:false,message:'Start Date cannot be before the Project\'s Start Date ('+formatDateShort(parentProject.startDate)+').'};
+  if(lvl===1){
+    const parentProject=modalMode==='add'?findNode(modalParentId,data.nodes):findParent(modalEditId,data.nodes,null);
+    if(parentProject){
+      if(parentProject.startDate&&startDate&&startDate<parentProject.startDate){
+        return{valid:false,message:'Start Date cannot be before the Project\'s Start Date ('+formatDateShort(parentProject.startDate)+').'};
+      }
+      if(parentProject.startDate&&endDate&&endDate<parentProject.startDate){
+        return{valid:false,message:'End Date cannot be before the Project\'s Start Date ('+formatDateShort(parentProject.startDate)+').'};
+      }
+      if(parentProject.endDate&&endDate&&endDate>parentProject.endDate){
+        return{valid:false,message:'End Date cannot be after the Project\'s End Date ('+formatDateShort(parentProject.endDate)+').'};
+      }
+      if(parentProject.endDate&&startDate&&startDate>parentProject.endDate){
+        return{valid:false,message:'Start Date cannot be after the Project\'s End Date ('+formatDateShort(parentProject.endDate)+').'};
+      }
     }
-    if(parentProject.startDate&&endDate&&endDate<parentProject.startDate){
-      return{valid:false,message:'End Date cannot be before the Project\'s Start Date ('+formatDateShort(parentProject.startDate)+').'};
-    }
-    if(parentProject.endDate&&endDate&&endDate>parentProject.endDate){
-      return{valid:false,message:'End Date cannot be after the Project\'s End Date ('+formatDateShort(parentProject.endDate)+').'};
-    }
-    if(parentProject.endDate&&startDate&&startDate>parentProject.endDate){
-      return{valid:false,message:'Start Date cannot be after the Project\'s End Date ('+formatDateShort(parentProject.endDate)+').'};
+    return{valid:true};
+  }
+  // Task 1 (Task Ribbon — Date Validation): Task (level 2) End Date must not
+  // exceed its parent Project's End Date, and Sub Task (level 3) End Date
+  // must not exceed its parent Task's End Date. The Task Ribbon's delay
+  // logic reads these same End Dates, so an out-of-range End Date here
+  // would otherwise be able to produce a nonsensical delay reading. Only
+  // the End Date relationship is enforced, per the requirement — Start
+  // Date behaviour (checked against its own End Date above) is unchanged.
+  if(lvl===2||lvl===3){
+    const parentNode=modalMode==='add'?findNode(modalParentId,data.nodes):findParent(modalEditId,data.nodes,null);
+    if(parentNode&&parentNode.endDate&&endDate&&endDate>parentNode.endDate){
+      const parentLabel=lvl===2?'Project':'Task';
+      return{valid:false,message:'End Date cannot be after the '+parentLabel+'\'s End Date ('+formatDateShort(parentNode.endDate)+').'};
     }
   }
   return{valid:true};
@@ -16779,6 +16980,15 @@ document.addEventListener('click',function(e){
   const dd=document.getElementById('mytask-ap-dropdown');
   if(dd&&dd.style.display==='block'&&wrap&&!wrap.contains(e.target))dd.style.display='none';
 });
+// Task 1 (My Tasks — Meeting No. Display): display-only reformat for the
+// My Task page's Meeting No. column — "MTG-001/26" → "M001/26" (drops the
+// "TG-"). This only affects how the value is shown on this one page; the
+// underlying stored meeting number (m.number) that Meeting Management's
+// list, search, generation (momNextNumber), and every other display of it
+// use is completely untouched.
+function myTaskFormatMeetingNo(num){
+  return (num||'').replace(/^MTG-/,'M');
+}
 function renderMyTaskTable(){
   const tbody=document.getElementById('mytask-tbody');
   if(!tbody)return;
@@ -16812,7 +17022,7 @@ function renderMyTaskTable(){
   const countEl=document.getElementById('mytask-count');
   if(countEl)countEl.textContent=tasks.length+' task(s)';
   if(!tasks.length){
-    tbody.innerHTML='<tr><td colspan="11" style="padding:20px;text-align:center;color:var(--muted2)">No tasks assigned yet.</td></tr>';
+    tbody.innerHTML='<tr><td colspan="9" style="padding:20px;text-align:center;color:var(--muted2)">No tasks assigned yet.</td></tr>';
     return;
   }
   // Task 3 (Total Due (Days)): whole-day difference between the relevant two
@@ -16862,15 +17072,16 @@ function renderMyTaskTable(){
     // established green rather than introducing a new color.
     const rowBg=i%2===1?'background:rgba(39,217,142,.06);':'';
     return `<tr style="border-top:1px solid var(--border);${rowBg}">
-      <td style="padding:5px 10px;color:var(--accent);font-weight:700">T-${String(i+1).padStart(3,'0')}</td>
-      <td style="padding:5px 10px"><span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:${isProject?'rgba(0,198,255,.15)':'rgba(245,166,35,.15)'};color:${isProject?'var(--accent)':'var(--amber)'}">${isProject?'Project':'Meeting'}</span></td>
-      <td style="padding:5px 10px">${eH(t.meetingNumber)||'—'}</td>
+      <td style="padding:5px 10px;font-size:11px">${eH(myTaskFormatMeetingNo(t.meetingNumber))||'—'}</td>
       <td style="padding:5px 10px">${t.meetingDate?eH(formatDateShort(t.meetingDate)):'—'}</td>
-      <td style="padding:5px 10px;font-weight:500">${eH(t.taskName)}${pathHtml}</td>
+      <td style="padding:5px 10px;font-weight:500">
+        <div style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word" title="${eH(t.taskName)}">${eH(t.taskName)}</div>
+        ${pathHtml}
+      </td>
       <td style="padding:5px 10px">${t.assignedDate?eH(formatDateShort(t.assignedDate)):'—'}</td>
       <td style="padding:5px 10px">${assignedCell}</td>
       <td style="padding:5px 10px">
-        <select onchange="${statusOnchange}" ${canEdit()?'':'disabled'} style="padding:4px 6px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-family:var(--font-body)">
+        <select onchange="${statusOnchange}" ${canEdit()?'':'disabled'} style="width:100%;min-width:110px;box-sizing:border-box;padding:4px 6px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-family:var(--font-body)">
           <option value="pending"${t.status==='pending'?' selected':''}>Pending</option>
           <option value="inprogress"${t.status==='inprogress'?' selected':''}>In Progress</option>
           <option value="completed"${t.status==='completed'?' selected':''}>Completed</option>

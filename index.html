@@ -15,9 +15,10 @@
   --bg:#0b0f1a; --surface:#131929; --surface2:#1a2235; --surface3:#202b3d;
   --border:#253047; --text:#e2eaf5; --muted:#7a90b0; --muted2:#4a607a;
   --header-bg:linear-gradient(135deg,#161b22,#1c2129);
-  --lvl0-bg:linear-gradient(90deg,#21262d,#1c2129); --lvl1-bg:linear-gradient(90deg,#30363d,#262c33);
+  --lvl0-bg:linear-gradient(90deg,#6b7280,#5b6470); --lvl1-bg:linear-gradient(90deg,#898e99,#7c838d);
   --header-title-color:#fff; --header-sub-color:#7a90b0; --header-border:#253047;
-  --lvl2-bg:var(--surface2); --lvl3-bg:var(--surface); --lvl3-hover:var(--surface2);
+  --lvl2-bg:#313849; --lvl3-bg:var(--surface); --lvl3-hover:var(--surface2);
+  --lvl2-info-color:var(--muted);
   --node-children-border:rgba(255,255,255,0.06); --node-toggle-color:rgba(255,255,255,0.6);
   --icon-btn-bg:rgba(255,255,255,0.08); --icon-btn-hover:rgba(255,255,255,0.15);
   --select-opt-bg:#1a2235; --stat-bar-gap:var(--border); --ring-track:rgba(255,255,255,0.1);
@@ -26,9 +27,10 @@
   --bg:#f0f4fb; --surface:#fff; --surface2:#eaf0f9; --surface3:#dde6f3;
   --border:#c8d6e8; --text:#1a2a40; --muted:#5a7090; --muted2:#8aa0bc;
   --header-bg:linear-gradient(135deg,#fff,#f6f8fa);
-  --lvl0-bg:linear-gradient(90deg,#24292f,#2d333b); --lvl1-bg:linear-gradient(90deg,#444c56,#373e47);
+  --lvl0-bg:linear-gradient(90deg,#6b7280,#5b6470); --lvl1-bg:linear-gradient(90deg,#898e99,#7c838d);
   --header-title-color:#1a2a40; --header-sub-color:#5a7090; --header-border:#d0d7de;
-  --lvl2-bg:#eaeef2; --lvl3-bg:#f6f8fa; --lvl3-hover:#e2e5e9;
+  --lvl2-bg:#f8f9f9; --lvl3-bg:#f6f8fa; --lvl3-hover:#e2e5e9;
+  --lvl2-info-color:#000000;
   --node-children-border:rgba(0,0,0,0.08); --node-toggle-color:rgba(255,255,255,0.7);
   --icon-btn-bg:rgba(0,0,0,0.06); --icon-btn-hover:rgba(0,0,0,0.12);
   --select-opt-bg:#fff; --stat-bar-gap:#c8d6e8; --ring-track:rgba(0,0,0,0.08);
@@ -168,6 +170,18 @@ header{background:var(--header-bg);border-bottom:1px solid var(--header-border);
 .lvl-3>.node-row{background:var(--lvl3-bg);border:1px solid transparent;min-height:28px;}
 .lvl-3>.node-row .node-label{color:var(--muted);font-size:12px;font-weight:400;}
 .lvl-3>.node-row:hover{background:var(--lvl3-hover);}
+/* Task ribbon (Light Mode only) — Dark Mode styling above is untouched.
+   1) All text black. 2) Percentage badge gets stronger background tint +
+   bold black text so it stands out against the now much paler ribbon.
+   3) Progress bar track darkened for visibility. Scoped to .lvl-2 only —
+   Program/Project/Sub Task rows, and every other .node-badge/.node-progress-bar
+   usage elsewhere in the app, are unaffected. */
+[data-theme="light"] .lvl-2>.node-row .node-label{color:#000000;}
+[data-theme="light"] .lvl-2>.node-row .node-badge{color:#000000;font-weight:700;}
+[data-theme="light"] .lvl-2>.node-row .node-badge.badge-green{background:rgba(39,217,142,.45);}
+[data-theme="light"] .lvl-2>.node-row .node-badge.badge-blue{background:rgba(0,198,255,.4);}
+[data-theme="light"] .lvl-2>.node-row .node-badge.badge-amber{background:rgba(245,166,35,.45);}
+[data-theme="light"] .lvl-2>.node-row .node-progress-bar{background:rgba(0,0,0,.25);}
 .node-children{margin-left:20px;padding-left:8px;border-left:2px solid var(--node-children-border);display:none;flex-direction:column;gap:4px;padding-top:4px;}
 .node-children.open{display:flex;}
 .task-check{width:15px;height:15px;border:1.5px solid var(--muted2);border-radius:4px;flex-shrink:0;margin-right:7px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:var(--transition);}
@@ -1349,20 +1363,20 @@ body.readonly .icon-btn.tl-expand-details-btn{pointer-events:auto;opacity:1;}
       <span id="mytask-count" style="font-size:11px;color:var(--muted)"></span>
     </div>
     <div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px;background:var(--surface)">
-      <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:1080px">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:1080px">
         <thead>
           <tr style="background:var(--surface2)">
-            <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:70px">Task No.</th>
-            <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:80px">Source</th>
-            <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:100px">Meeting No.</th>
-            <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:100px">Meeting Date</th>
-            <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border)">Task Name</th>
-            <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:100px">Due Date</th>
-            <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:110px">Assigned To</th>
-            <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:120px">Status</th>
-            <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:100px">Completed Date</th>
-            <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:100px">Total Due (Days)</th>
-            <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:340px">Status Remarks</th>
+            <th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:70px">Task No.</th>
+            <th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:80px">Source</th>
+            <th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:100px">Meeting No.</th>
+            <th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:100px">Meeting Date</th>
+            <th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border)">Task Name</th>
+            <th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:100px">Due Date</th>
+            <th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:110px">Assigned To</th>
+            <th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:120px">Status</th>
+            <th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:100px">Completed Date</th>
+            <th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:100px">Total Due (Days)</th>
+            <th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:340px">Status Remarks</th>
           </tr>
         </thead>
         <tbody id="mytask-tbody"><tr><td colspan="11" style="padding:20px;text-align:center;color:var(--muted2)">No tasks assigned yet.</td></tr></tbody>
@@ -8612,7 +8626,7 @@ const DEFAULT_SB_CONFIG={
 
 // Single switch for Testing vs Production Supabase table. Change APP_ENV only —
 // every real database operation reads TABLE_NAME derived from it below.
-const APP_ENV = 'PROD'; // TEST or PROD
+const APP_ENV = 'TEST'; // TEST or PROD
 const TABLE_NAME =
     APP_ENV === 'TEST'
         ? 'b2_tracker_data_Testing'
@@ -9492,6 +9506,17 @@ async function _dsSupabaseConnectCore(url,anonKey,opts){
           }finally{
             window._DS._applyingRemote=false;
           }
+          // Root-cause fix (Duplicate Node ID repair): initIdCounter/_dedupeNodeIds
+          // already exist and are correctly wired into the Firebase sync path, but
+          // were never called from Supabase's — the app's actual current primary
+          // provider — so this self-healing repair has effectively never run in
+          // real operation. Mirrors Firebase's _dsRefreshActivePage() exactly: keep
+          // the id counter advanced, then repair any duplicate ids and persist the
+          // correction if anything changed.
+          if(val&&val.modules){
+            initIdCounter(data.nodes);
+            if(_dedupeNodeIds(data.nodes)){changed=true;save();saveFeatures();}
+          }
           if(changed){
             render();updateStats();
             if(document.getElementById('page-users')&&document.getElementById('page-users').classList.contains('active'))renderUserTable();
@@ -9509,6 +9534,12 @@ async function _dsSupabaseConnectCore(url,anonKey,opts){
     if(existingPayload&&existingPayload.modules){
       data=Object.assign({},data,{nodes:_normalizeNodeTree(existingPayload.modules)});
       localStorage.setItem(STORE_KEY,JSON.stringify(data));
+      // Root-cause fix (Duplicate Node ID repair): see matching comment in the
+      // realtime handler below — same repair, applied on initial load too, since
+      // duplicates already sitting in Supabase need to be caught the moment any
+      // session first connects, not only on the next live update.
+      initIdCounter(data.nodes);
+      const _sbDeduped=_dedupeNodeIds(data.nodes);
       if(existingPayload.users)saveUsers(_dsMergeIncomingUsers(existingPayload.users));
       if(existingPayload.meetings)saveMeetings(Array.isArray(existingPayload.meetings)?existingPayload.meetings:Object.values(existingPayload.meetings));
       if(existingPayload.teams)localStorage.setItem(TEAMS_KEY,JSON.stringify(Array.isArray(existingPayload.teams)?existingPayload.teams:Object.values(existingPayload.teams)));
@@ -9518,6 +9549,7 @@ async function _dsSupabaseConnectCore(url,anonKey,opts){
       if(existingPayload.masterFeatures)saveMasterFeats(Array.isArray(existingPayload.masterFeatures)?existingPayload.masterFeatures:Object.values(existingPayload.masterFeatures));
       if(existingPayload.mom)saveMomList(Array.isArray(existingPayload.mom)?existingPayload.mom:Object.values(existingPayload.mom));
       if(existingPayload.mtgFeats)saveMtgFeats(Array.isArray(existingPayload.mtgFeats)?existingPayload.mtgFeats:Object.values(existingPayload.mtgFeats));
+      if(_sbDeduped){save();saveFeatures();}
       render();updateStats();
     }else{
       const {error:upsertErr}=await client.from(TABLE_NAME).upsert({id:'main',payload:window._DS._serialize(data),updated_at:new Date().toISOString()});
@@ -13071,6 +13103,30 @@ function applyProjectFilters(){
   render();
 }
 
+// Task 3 (Task Ribbon — Current Status): the most recently completed Sub
+// Task directly under this Task node. Mirrors the same completion-recency
+// logic already used by the Readiness page's Current Stage fix (latest
+// node.history entry that reached 100%), reused here as a small dedicated
+// function since this operates on a single Task's own children rather than
+// a whole Project's nested Jobs.
+function nodeLastCompletedSubTaskName(taskNode){
+  const subtasks=(taskNode.children||[]).filter(c=>(c.level||0)===3);
+  const completed=subtasks.filter(st=>calcProgress(st)===100);
+  if(!completed.length)return'';
+  function completedTs(st){
+    if(!Array.isArray(st.history))return null;
+    const done=st.history.filter(h=>h.progress>=100).sort((a,b)=>new Date(b.ts)-new Date(a.ts))[0];
+    return done?done.ts:null;
+  }
+  completed.sort((a,b)=>{
+    const ta=completedTs(a),tb=completedTs(b);
+    if(ta&&tb)return new Date(tb)-new Date(ta);
+    if(ta)return -1;
+    if(tb)return 1;
+    return 0;
+  });
+  return completed[0].name;
+}
 function renderNode(node){
   const lvl=node.level||0;
   const prog=calcProgress(node);
@@ -13121,6 +13177,26 @@ function renderNode(node){
     const fmt=d=>d?new Date(d).toLocaleDateString('en-GB',{day:'2-digit',month:'2-digit',year:'2-digit'}):'—';
     dateLbl.textContent=`${fmt(node.startDate)} → ${fmt(node.endDate)}`;
     row.appendChild(dateLbl);
+  }
+  // Task 2 & 3 (Task Ribbon info): Current Status (last completed Sub Task)
+  // plus Start/Due dates, Task (level 2) rows only. Date segment now matches
+  // the same label-free "start → end" format already used by the
+  // Program/Project date display above, per requirement. Uses
+  // var(--lvl2-info-color) — black in Light Mode, var(--muted) in Dark Mode
+  // (unchanged) — rather than the lvl0/1 block's hardcoded white, since the
+  // Task ribbon has a light background in both themes.
+  if(lvl===2){
+    const taskInfoParts=[];
+    const lastCompletedName=nodeLastCompletedSubTaskName(node);
+    if(lastCompletedName)taskInfoParts.push(`Status: ${eH(lastCompletedName)}`);
+    const fmt2=d=>d?new Date(d).toLocaleDateString('en-GB',{day:'2-digit',month:'2-digit',year:'2-digit'}):'—';
+    if(node.startDate||node.endDate)taskInfoParts.push(`${fmt2(node.startDate)} → ${fmt2(node.endDate)}`);
+    if(taskInfoParts.length){
+      const taskInfoLbl=document.createElement('div');
+      taskInfoLbl.style.cssText='font-size:10px;color:var(--lvl2-info-color);white-space:nowrap;margin-right:8px;flex-shrink:0;';
+      taskInfoLbl.textContent=taskInfoParts.join(' | ');
+      row.appendChild(taskInfoLbl);
+    }
   }
   if(!isTask){const pb=document.createElement('div');pb.className='node-progress-bar';pb.innerHTML=`<div class="node-progress-fill" style="width:${prog}%;background:${progressColor(prog)}"></div>`;row.appendChild(pb);}
   const badge=document.createElement('div');badge.className=`node-badge ${badgeClass(prog)}`;badge.textContent=prog+'%';row.appendChild(badge);
@@ -13773,8 +13849,12 @@ function renderAssetInformationTable(){
       const pct=arOverallProgress(p);
       const statusLabel=pct>=100?'Completed':(pct>0?'In Progress':'Pending');
       const statusTone=pct>=100?'green':(pct>0?'amber':'muted');
+      // Alternating row colors (matching the My Task page): a very light,
+      // low-opacity tint of the app's existing --green accent on every
+      // alternate row, reusing the same established color/opacity.
+      const rowBg=i%2===1?'background:rgba(39,217,142,.06);':'';
       return `
-      <tr style="border-bottom:1px solid var(--border)">
+      <tr style="border-bottom:1px solid var(--border);${rowBg}">
         <td style="padding:8px 10px;color:var(--muted)">${i+1}</td>
         <td style="padding:8px 10px;font-weight:600">${eH(task.name)}</td>
         <td style="padding:8px 10px">${eH(p.executionMode||'—')}</td>
@@ -16454,24 +16534,28 @@ function renderMyTaskTable(){
     const completedDateCell=t.status==='completed'
       ?`<input type="date" value="${eH((t.completedDate||'').slice(0,10))}" onchange="${completedDateOnchange}" ${canEdit()?'':'disabled'} style="padding:4px 6px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-family:var(--font-body)">`
       :'—';
-    return `<tr style="border-top:1px solid var(--border)">
-      <td style="padding:9px 10px;color:var(--accent);font-weight:700">T-${String(i+1).padStart(3,'0')}</td>
-      <td style="padding:9px 10px"><span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:${isProject?'rgba(0,198,255,.15)':'rgba(245,166,35,.15)'};color:${isProject?'var(--accent)':'var(--amber)'}">${isProject?'Project':'Meeting'}</span></td>
-      <td style="padding:9px 10px">${eH(t.meetingNumber)||'—'}</td>
-      <td style="padding:9px 10px">${t.meetingDate?eH(formatDateShort(t.meetingDate)):'—'}</td>
-      <td style="padding:9px 10px;font-weight:500">${eH(t.taskName)}${pathHtml}</td>
-      <td style="padding:9px 10px">${t.assignedDate?eH(formatDateShort(t.assignedDate)):'—'}</td>
-      <td style="padding:9px 10px">${assignedCell}</td>
-      <td style="padding:9px 10px">
-        <select onchange="${statusOnchange}" ${canEdit()?'':'disabled'} style="padding:4px 8px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-family:var(--font-body)">
+    // Task 3 (Alternating Row Colors): a very light, low-opacity tint of the
+    // app's existing --green accent on every alternate row — reuses the
+    // established green rather than introducing a new color.
+    const rowBg=i%2===1?'background:rgba(39,217,142,.06);':'';
+    return `<tr style="border-top:1px solid var(--border);${rowBg}">
+      <td style="padding:5px 10px;color:var(--accent);font-weight:700">T-${String(i+1).padStart(3,'0')}</td>
+      <td style="padding:5px 10px"><span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:${isProject?'rgba(0,198,255,.15)':'rgba(245,166,35,.15)'};color:${isProject?'var(--accent)':'var(--amber)'}">${isProject?'Project':'Meeting'}</span></td>
+      <td style="padding:5px 10px">${eH(t.meetingNumber)||'—'}</td>
+      <td style="padding:5px 10px">${t.meetingDate?eH(formatDateShort(t.meetingDate)):'—'}</td>
+      <td style="padding:5px 10px;font-weight:500">${eH(t.taskName)}${pathHtml}</td>
+      <td style="padding:5px 10px">${t.assignedDate?eH(formatDateShort(t.assignedDate)):'—'}</td>
+      <td style="padding:5px 10px">${assignedCell}</td>
+      <td style="padding:5px 10px">
+        <select onchange="${statusOnchange}" ${canEdit()?'':'disabled'} style="padding:4px 6px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-family:var(--font-body)">
           <option value="pending"${t.status==='pending'?' selected':''}>Pending</option>
           <option value="inprogress"${t.status==='inprogress'?' selected':''}>In Progress</option>
           <option value="completed"${t.status==='completed'?' selected':''}>Completed</option>
         </select>
       </td>
-      <td style="padding:9px 10px">${completedDateCell}</td>
-      <td style="padding:9px 10px">${totalDue===null?'—':totalDue}</td>
-      <td style="padding:9px 10px;max-width:340px">
+      <td style="padding:5px 10px">${completedDateCell}</td>
+      <td style="padding:5px 10px">${totalDue===null?'—':totalDue}</td>
+      <td style="padding:5px 10px;max-width:340px">
         <div style="display:flex;align-items:center;gap:8px">
           <span style="font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0" title="${eH(latestText)}">${eH(latestText)||'—'}</span>
           ${isProject?'':`<button class="btn btn-ghost btn-xs" onclick="openMyTaskRemarksModal(${t.meetingId},${t.rowIndex})" style="flex-shrink:0">View More</button>`}

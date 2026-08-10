@@ -4105,10 +4105,14 @@ async function submitURLReset(){
   const tokens=loadResetTokens();
   const entry=tokens[token];
   if(!entry||entry.exp<Date.now()){errEl.textContent='Token expired. Request a new link.';errEl.style.display='';return;}
+  const newHash=await hashPw(pw1);
+  // Root-cause fix (Local User List Race): re-fetch the current list AFTER
+  // the hash finishes, not before — otherwise any deletion made elsewhere
+  // during that computation would be silently overwritten by this save.
   const users=loadUsers();
   const user=users.find(u=>u.username===entry.username);
   if(!user){errEl.textContent='User not found.';errEl.style.display='';return;}
-  user.hash=await hashPw(pw1);
+  user.hash=newHash;
   saveUsers(users);
   delete tokens[token];
   saveResetTokens(tokens);
@@ -4180,11 +4184,68 @@ function loadUsers(){try{return (JSON.parse(localStorage.getItem(AUTH_KEY))||[])
 // (see umDeleteUser) — never as a side-effect of a sync merge — so any
 // locally-known user missing from the incoming remote array is preserved
 // rather than dropped.
+// Root-cause fix (Deleted Users Reappearing): _dsMergeIncomingUsers() treats
+// any user present locally but missing from the incoming remote list as "not
+// yet synced" and merges it back in — but a local-only user isn't always
+// unsynced; it can just as easily be one THIS session already deleted, with
+// the deletion correctly reflected in `remote`, but still sitting in this
+// session's own stale local cache. Without a way to tell those apart, that
+// stale record gets merged back in and re-pushed, silently undoing the
+// deletion. umDeleteUser() records a tombstone at the moment of deletion;
+// anything on this list is never resurrected by the merge. Entries older
+// than 48h are pruned automatically, so a legitimately re-created user with
+// the same email isn't blocked forever and the list stays small.
+const DELETED_USERS_KEY='b2_deleted_users_v1';
+function loadDeletedUsersTombstone(){
+  try{
+    const raw=JSON.parse(localStorage.getItem(DELETED_USERS_KEY))||{};
+    const cutoff=Date.now()-48*60*60*1000;
+    let changed=false;
+    Object.keys(raw).forEach(u=>{
+      if(new Date(raw[u]).getTime()<cutoff){delete raw[u];changed=true;}
+    });
+    if(changed)localStorage.setItem(DELETED_USERS_KEY,JSON.stringify(raw));
+    return raw;
+  }catch(e){return{};}
+}
+function recordDeletedUserTombstone(username){
+  try{
+    const raw=loadDeletedUsersTombstone();
+    raw[username]=new Date().toISOString();
+    localStorage.setItem(DELETED_USERS_KEY,JSON.stringify(raw));
+  }catch(e){}
+}
+// Root-cause fix (Deleted User Reappearing — cross-session/tab): the tombstone
+// above only ever lived in the deleting device's OWN localStorage, so it could
+// only ever protect that one device. Any other already-open tab/browser that
+// still had the (now-deleted) user sitting in ITS local cache had no tombstone
+// for it, so the very next remote snapshot it received treated that stale
+// local record as "not yet synced" and merged it back in — and that device's
+// next save then re-pushed it, resurrecting the user in Supabase itself. The
+// tombstone is now included in the synced payload (see _serialize's
+// deletedUsers key) and merged into every device's local tombstone store
+// here, right before _dsMergeIncomingUsers runs, so a deletion made on one
+// device is honoured everywhere instead of only where it happened.
+function mergeIncomingTombstones(remoteDeleted){
+  if(!remoteDeleted||typeof remoteDeleted!=='object')return;
+  try{
+    const local=loadDeletedUsersTombstone();
+    let changed=false;
+    Object.keys(remoteDeleted).forEach(u=>{
+      if(!local[u]||new Date(remoteDeleted[u])>new Date(local[u])){
+        local[u]=remoteDeleted[u];
+        changed=true;
+      }
+    });
+    if(changed)localStorage.setItem(DELETED_USERS_KEY,JSON.stringify(local));
+  }catch(e){}
+}
 function _dsMergeIncomingUsers(remoteUsers){
   const remote=Array.isArray(remoteUsers)?remoteUsers:Object.values(remoteUsers||{});
   const local=loadUsers();
   const remoteUsernames=new Set(remote.map(u=>u&&u.username));
-  const localOnly=local.filter(u=>u&&!remoteUsernames.has(u.username));
+  const tombstones=loadDeletedUsersTombstone();
+  const localOnly=local.filter(u=>u&&!remoteUsernames.has(u.username)&&!tombstones[u.username]);
   return remote.concat(localOnly);
 }
 function saveUsers(u){
@@ -4198,8 +4259,14 @@ function saveUsers(u){
   if(window._DS&&window._DS.type!=='local'&&!window._DS._applyingRemote)window._DS._onSave(data);
 }
 async function ensureSuperAdmin(){
-  const users=loadUsers();
+  // Root-cause fix (Local User List Race — deleted Users reappearing):
+  // loadUsers() must be re-read AFTER the slow hashPw() below, not before —
+  // this function runs on EVERY boot, so capturing the list first and
+  // saving it after an await leaves a window where any deletion (or other
+  // change) made elsewhere during that hash computation gets silently
+  // overwritten by this stale pre-hash snapshot the moment this save fires.
   const freshHash=await hashPw('b2admin@4321');
+  const users=loadUsers();
   // Migration: if an older record still uses the legacy 'Ilyas' username, rename it to
   // the new email-based username instead of creating a duplicate superadmin account.
   const legacyIdx=users.findIndex(u=>u.username==='Ilyas'&&u.role==='superadmin');
@@ -4924,6 +4991,63 @@ function saveTeams(t){
   localStorage.setItem(TEAMS_KEY,JSON.stringify(t));
   if(window._DS&&window._DS.type!=='local'&&!window._DS._applyingRemote)window._DS._onSave(data);
 }
+// Root-cause fix (New Team Members Not Persisting): the incoming Firebase/
+// Supabase snapshot handlers below previously did `localStorage.setItem(
+// TEAMS_KEY, JSON.stringify(remoteTeams))` — an UNCONDITIONAL overwrite of
+// local team data with whatever the remote source happened to hold at that
+// moment. tmCreate()'s push to Supabase/Firebase is fire-and-forget (not
+// awaited), so if this device's own auto-reconnect (which runs on every
+// page load) or another device's realtime update lands in that window, it
+// fetches/receives a STALE snapshot that predates the new member and wipes
+// it from local storage — and the next save() from this device then
+// re-pushes that reduced list, permanently deleting the member from the
+// database too. This mirrors the exact race already fixed for Users via
+// _dsMergeIncomingUsers; Teams never received the equivalent protection.
+// Applying the same merge-by-id + deletion-tombstone pattern here so a
+// locally-known member missing from an incoming snapshot is preserved
+// unless it was actually deleted (see tmDelete/recordDeletedTeamTombstone).
+const DELETED_TEAMS_KEY='b2_deleted_teams_v1';
+function loadDeletedTeamsTombstone(){
+  try{
+    const raw=JSON.parse(localStorage.getItem(DELETED_TEAMS_KEY))||{};
+    const cutoff=Date.now()-48*60*60*1000;
+    let changed=false;
+    Object.keys(raw).forEach(id=>{
+      if(new Date(raw[id]).getTime()<cutoff){delete raw[id];changed=true;}
+    });
+    if(changed)localStorage.setItem(DELETED_TEAMS_KEY,JSON.stringify(raw));
+    return raw;
+  }catch(e){return{};}
+}
+function recordDeletedTeamTombstone(id){
+  try{
+    const raw=loadDeletedTeamsTombstone();
+    raw[id]=new Date().toISOString();
+    localStorage.setItem(DELETED_TEAMS_KEY,JSON.stringify(raw));
+  }catch(e){}
+}
+function mergeIncomingTeamTombstones(remoteDeleted){
+  if(!remoteDeleted||typeof remoteDeleted!=='object')return;
+  try{
+    const local=loadDeletedTeamsTombstone();
+    let changed=false;
+    Object.keys(remoteDeleted).forEach(id=>{
+      if(!local[id]||new Date(remoteDeleted[id])>new Date(local[id])){
+        local[id]=remoteDeleted[id];
+        changed=true;
+      }
+    });
+    if(changed)localStorage.setItem(DELETED_TEAMS_KEY,JSON.stringify(local));
+  }catch(e){}
+}
+function _dsMergeIncomingTeams(remoteTeams){
+  const remote=Array.isArray(remoteTeams)?remoteTeams:Object.values(remoteTeams||{});
+  const local=loadTeams();
+  const remoteIds=new Set(remote.map(m=>m&&m.id));
+  const tombstones=loadDeletedTeamsTombstone();
+  const localOnly=local.filter(m=>m&&!remoteIds.has(m.id)&&!tombstones[m.id]);
+  return remote.concat(localOnly);
+}
 let tmIdC=7000;
 function initTmId(){const t=loadTeams();t.forEach(m=>{if(m.id>=tmIdC)tmIdC=m.id+1;});}
 
@@ -5000,6 +5124,7 @@ function renderTeams(){
 function tmDelete(id){
   let teams=loadTeams();
   teams=teams.filter(m=>m.id!==id);
+  recordDeletedTeamTombstone(id);
   saveTeams(teams);
   renderTeams();
   toast('Member removed');
@@ -8684,8 +8809,13 @@ window._DS={
       modules:appData.nodes||[],
       features:Object.assign({},...Object.entries(featuresMap).map(([k,v])=>({[k]:v}))),
       users:loadUsers(),
+      // Root-cause fix (Deleted User Reappearing): sync the deletion
+      // tombstones themselves, not just the user list — see
+      // mergeIncomingTombstones() for why this is required.
+      deletedUsers:loadDeletedUsersTombstone(),
       meetings:loadMeetings(),
       teams:loadTeams(),
+      deletedTeams:loadDeletedTeamsTombstone(),
       milestones:loadMilestones(),
       templates:loadTemplates(),
       // Root-cause fix (My Tasks / Task Board data loss): these three stores
@@ -9202,6 +9332,7 @@ async function _dsFirebaseConnectCore(apiKey,projectId,databaseURL,opts){
           changed=true;
         }
         if(val.users){
+          mergeIncomingTombstones(val.deletedUsers);
           saveUsers(_dsMergeIncomingUsers(val.users));
           changed=true;
         }
@@ -9210,7 +9341,8 @@ async function _dsFirebaseConnectCore(apiKey,projectId,databaseURL,opts){
           changed=true;
         }
         if(val.teams){
-          localStorage.setItem(TEAMS_KEY,JSON.stringify(Array.isArray(val.teams)?val.teams:Object.values(val.teams)));
+          mergeIncomingTeamTombstones(val.deletedTeams);
+          localStorage.setItem(TEAMS_KEY,JSON.stringify(_dsMergeIncomingTeams(val.teams)));
           initTmId(); // Root-cause fix: resync the id counter so a locally-created member can never reuse an id that just arrived from Firebase
           changed=true;
         }
@@ -9286,9 +9418,9 @@ async function _dsFirebaseConnectCore(apiKey,projectId,databaseURL,opts){
           data=Object.assign({},data,{nodes:_normalizeNodeTree(_fbExistingVal.modules)});
           localStorage.setItem(STORE_KEY,JSON.stringify(data));
         }
-        if(_fbExistingVal.users)saveUsers(_dsMergeIncomingUsers(_fbExistingVal.users));
+        if(_fbExistingVal.users){mergeIncomingTombstones(_fbExistingVal.deletedUsers);saveUsers(_dsMergeIncomingUsers(_fbExistingVal.users));}
         if(_fbExistingVal.meetings)saveMeetings(Array.isArray(_fbExistingVal.meetings)?_fbExistingVal.meetings:Object.values(_fbExistingVal.meetings));
-        if(_fbExistingVal.teams){localStorage.setItem(TEAMS_KEY,JSON.stringify(Array.isArray(_fbExistingVal.teams)?_fbExistingVal.teams:Object.values(_fbExistingVal.teams)));initTmId();}
+        if(_fbExistingVal.teams){mergeIncomingTeamTombstones(_fbExistingVal.deletedTeams);localStorage.setItem(TEAMS_KEY,JSON.stringify(_dsMergeIncomingTeams(_fbExistingVal.teams)));initTmId();}
         if(_fbExistingVal.milestones)localStorage.setItem(MILESTONES_KEY,JSON.stringify(Array.isArray(_fbExistingVal.milestones)?_fbExistingVal.milestones:Object.values(_fbExistingVal.milestones)));
         if(_fbExistingVal.templates)localStorage.setItem(TEMPLATES_KEY,JSON.stringify(Array.isArray(_fbExistingVal.templates)?_fbExistingVal.templates:Object.values(_fbExistingVal.templates)));
       }finally{
@@ -9486,6 +9618,21 @@ async function _dsSupabaseConnectCore(url,anonKey,opts){
         try{
           const val=payload.new&&payload.new.payload;
           if(!val)return;
+          // Root-cause fix (Out-of-order realtime echo / silent data loss):
+          // Postgres Realtime does not guarantee delivery order relative to
+          // how fast this client's own successive saves resolve — every
+          // save() (including non-edit ones, like expanding/collapsing a
+          // tree node) fires its own independent push. Without this check,
+          // a stale echo of an EARLIER save can arrive and be applied AFTER
+          // a newer one already was, silently rolling the in-memory state
+          // back — and the next save() would then persist that regression,
+          // permanently discarding whatever was added in between. Every
+          // push already stamps updated_at; skip anything that isn't
+          // strictly newer than what's already loaded.
+          const incomingUpdatedAt=payload.new&&payload.new.updated_at;
+          if(incomingUpdatedAt&&data.lastUpdated&&new Date(incomingUpdatedAt)<=new Date(data.lastUpdated)){
+            return;
+          }
           let changed=false;
           window._DS._applyingRemote=true;
           try{
@@ -9494,9 +9641,9 @@ async function _dsSupabaseConnectCore(url,anonKey,opts){
               localStorage.setItem(STORE_KEY,JSON.stringify(data));
               changed=true;
             }
-            if(val.users){saveUsers(_dsMergeIncomingUsers(val.users));changed=true;}
+            if(val.users){mergeIncomingTombstones(val.deletedUsers);saveUsers(_dsMergeIncomingUsers(val.users));changed=true;}
             if(val.meetings){saveMeetings(Array.isArray(val.meetings)?val.meetings:Object.values(val.meetings));changed=true;}
-            if(val.teams){localStorage.setItem(TEAMS_KEY,JSON.stringify(Array.isArray(val.teams)?val.teams:Object.values(val.teams)));initTmId();changed=true;}
+            if(val.teams){mergeIncomingTeamTombstones(val.deletedTeams);localStorage.setItem(TEAMS_KEY,JSON.stringify(_dsMergeIncomingTeams(val.teams)));initTmId();changed=true;}
             if(val.milestones){localStorage.setItem(MILESTONES_KEY,JSON.stringify(Array.isArray(val.milestones)?val.milestones:Object.values(val.milestones)));changed=true;}
             if(val.templates){localStorage.setItem(TEMPLATES_KEY,JSON.stringify(Array.isArray(val.templates)?val.templates:Object.values(val.templates)));changed=true;}
             // Root-cause fix: same three previously-unsynced stores restored here too.
@@ -9514,6 +9661,7 @@ async function _dsSupabaseConnectCore(url,anonKey,opts){
           // the id counter advanced, then repair any duplicate ids and persist the
           // correction if anything changed.
           if(val&&val.modules){
+            if(incomingUpdatedAt)data.lastUpdated=incomingUpdatedAt;
             initIdCounter(data.nodes);
             if(_dedupeNodeIds(data.nodes)){changed=true;save();saveFeatures();}
           }
@@ -9540,9 +9688,9 @@ async function _dsSupabaseConnectCore(url,anonKey,opts){
       // session first connects, not only on the next live update.
       initIdCounter(data.nodes);
       const _sbDeduped=_dedupeNodeIds(data.nodes);
-      if(existingPayload.users)saveUsers(_dsMergeIncomingUsers(existingPayload.users));
+      if(existingPayload.users){mergeIncomingTombstones(existingPayload.deletedUsers);saveUsers(_dsMergeIncomingUsers(existingPayload.users));}
       if(existingPayload.meetings)saveMeetings(Array.isArray(existingPayload.meetings)?existingPayload.meetings:Object.values(existingPayload.meetings));
-      if(existingPayload.teams)localStorage.setItem(TEAMS_KEY,JSON.stringify(Array.isArray(existingPayload.teams)?existingPayload.teams:Object.values(existingPayload.teams)));
+      if(existingPayload.teams){mergeIncomingTeamTombstones(existingPayload.deletedTeams);localStorage.setItem(TEAMS_KEY,JSON.stringify(_dsMergeIncomingTeams(existingPayload.teams)));}
       if(existingPayload.milestones)localStorage.setItem(MILESTONES_KEY,JSON.stringify(Array.isArray(existingPayload.milestones)?existingPayload.milestones:Object.values(existingPayload.milestones)));
       if(existingPayload.templates)localStorage.setItem(TEMPLATES_KEY,JSON.stringify(Array.isArray(existingPayload.templates)?existingPayload.templates:Object.values(existingPayload.templates)));
       // Root-cause fix: same three previously-unsynced stores restored on initial hydrate too.
@@ -10628,9 +10776,15 @@ function renderUserTable(){
 // umCreateUser()'s catch block below.
 async function _umCreateLocalAccount(users,fullName,username,employeeNo,department,password,role,status){
   const hash=await hashPw(password);
+  // Root-cause fix (Local User List Race): the `users` array passed in was
+  // captured by the caller before this hash ran — re-fetch fresh now so a
+  // deletion made elsewhere during that computation isn't silently
+  // overwritten by this save. The passed-in array was only ever used for
+  // the caller's earlier duplicate-username check.
+  const freshUsers=loadUsers();
   // User Name = Email Address convention: the same value is stored as both username and email
-  users.push({username, email:username, fullName, employeeNo, department, status, hash, role, authMode:'local', permissions:getDefaultPerms(role)});
-  saveUsers(users);
+  freshUsers.push({username, email:username, fullName, employeeNo, department, status, hash, role, authMode:'local', permissions:getDefaultPerms(role)});
+  saveUsers(freshUsers);
   ['um-new-fullname','um-new-username','um-new-empno','um-new-department','um-new-password'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   renderUserTable();
   populateLoginDropdown();
@@ -10688,9 +10842,14 @@ async function umCreateUser(){
       }
       await secondaryApp.auth().signOut();
       await secondaryApp.delete();
+      // Root-cause fix (Local User List Race): re-fetch fresh here rather
+      // than pushing onto the `users` array captured before these Firebase
+      // network calls — a deletion made elsewhere during that time would
+      // otherwise be silently overwritten by this save.
+      const freshUsers2=loadUsers();
       // Mirror locally (no password hash) so RBAC/user list rendering works unchanged
-      users.push({username,email:username,fullName,employeeNo,department,status,role,uid,authMode:'firebase',permissions:perms});
-      saveUsers(users);
+      freshUsers2.push({username,email:username,fullName,employeeNo,department,status,role,uid,authMode:'firebase',permissions:perms});
+      saveUsers(freshUsers2);
       ['um-new-fullname','um-new-username','um-new-empno','um-new-department','um-new-password'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
       renderUserTable();
       populateLoginDropdown();
@@ -10728,8 +10887,11 @@ async function umCreateUser(){
           await fb2.database().ref('users/'+uid).set({fullName,email:username,role,department,status,employeeNo,permissions:perms,createdAt:new Date().toISOString()});
           await recoverApp.auth().signOut();
           await recoverApp.delete();
-          users.push({username,email:username,fullName,employeeNo,department,status,role,uid,authMode:'firebase',permissions:perms});
-          saveUsers(users);
+          // Root-cause fix (Local User List Race): re-fetch fresh here for
+          // the same reason as the main creation path above.
+          const freshUsers3=loadUsers();
+          freshUsers3.push({username,email:username,fullName,employeeNo,department,status,role,uid,authMode:'firebase',permissions:perms});
+          saveUsers(freshUsers3);
           ['um-new-fullname','um-new-username','um-new-empno','um-new-department','um-new-password'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
           renderUserTable();
           populateLoginDropdown();
@@ -10802,6 +10964,7 @@ function umDeleteUser(username){
     :'Delete this user? This cannot be undone.';
   if(!confirm(warning))return;
   users=users.filter(u=>u.username!==username);
+  recordDeletedUserTombstone(username);
   saveUsers(users);
   renderUserTable();
   populateLoginDropdown();
@@ -10859,10 +11022,15 @@ async function doResetPassword(){
   if(!confirm){showErr('Please confirm the new password.');return;}
   if(pw!==confirm){showErr('Passwords do not match. Please re-enter and try again.');return;}
 
+  const targetUsername=resetPwTarget;
+  const newHash=await hashPw(pw);
+  // Root-cause fix (Local User List Race): re-fetch the current list AFTER
+  // the hash finishes, not before — otherwise any deletion made elsewhere
+  // during that computation would be silently overwritten by this save.
   const users=loadUsers();
-  const user=users.find(u=>u.username===resetPwTarget);
+  const user=users.find(u=>u.username===targetUsername);
   if(!user){showErr('User not found. Please close and try again.');return;}
-  user.hash=await hashPw(pw);
+  user.hash=newHash;
   saveUsers(users);
   // Clear fields for security
   document.getElementById('resetpw-input').value='';
@@ -17222,7 +17390,6 @@ if(_bootRenested||_bootDeduped){
   // entirely — leaving a validly-logged-in user stuck on the login screen
   // (its default, visible-by-default state) after every refresh. Each step
   // now fails independently and can never block session restoration.
-  try{ await ensureSuperAdmin(); }catch(e){ console.error('ensureSuperAdmin error:',e); }
   try{ migrateToMasterFeatures(); }catch(e){ console.error('migrateToMasterFeatures error:',e); }
   try{ initBlId(); }catch(e){ console.error('initBlId error:',e); }
   try{ populateLoginDropdown(); }catch(e){ console.error('populateLoginDropdown error:',e); }
@@ -17239,6 +17406,20 @@ if(_bootRenested||_bootDeduped){
   // bootApp() runs, that line becomes a harmless no-op there, guaranteeing
   // this is still only ever started once.
   if(!window._dsAutoReconnected){window._dsAutoReconnected=true;window._dsInitPromise=_dsAutoReconnect();}
+  // Root-cause fix (Boot-time stale overwrite race — Team/User data loss):
+  // ensureSuperAdmin() always re-saves the local `users` array on every
+  // boot, and every save pushes ONE combined blob of every data domain
+  // (not just users). If that fired before the connection above finished
+  // pulling down the current remote state, it silently overwrote
+  // teams/users/meetings/etc. with whatever this browser happened to have
+  // cached locally — potentially stale by hours or days. Awaiting the same
+  // connection promise the rest of boot already exposes ensures this
+  // browser's local cache is fully up to date before ensureSuperAdmin() can
+  // trigger any save. This does not delay the login screen appearing — the
+  // connection attempt above is still fired immediately and unawaited by
+  // it; only the ensureSuperAdmin()-triggered save is deferred.
+  try{ await window._dsInitPromise; }catch(e){ console.error('Initial data-source connect error:',e); }
+  try{ await ensureSuperAdmin(); }catch(e){ console.error('ensureSuperAdmin error:',e); }
   // Change 3: restore session on refresh — only clear on explicit logout.
   // Always attempted, regardless of the outcome of the steps above.
   try{

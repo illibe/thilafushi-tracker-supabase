@@ -5338,6 +5338,47 @@ function _dsMergeIncomingTeams(remoteTeams){
   const localOnly=local.filter(m=>m&&!remoteIds.has(m.id)&&!tombstones[m.id]);
   return remote.concat(localOnly);
 }
+// Root-cause fix (Activities/Selection Process Data Loss — Cross-Session
+// Invisibility): masterFeatures had a receive path (unlike featuresMap
+// below) but, like modules/users/teams before this fix, applied every
+// incoming snapshot as an unconditional overwrite — a locally-added
+// Activity not yet reflected in a lagging snapshot (this device's own
+// realtime echo, or another session's concurrent save) would be silently
+// wiped, and the next save() from this device would persist that
+// regression, permanently discarding it. Same merge-by-id pattern already
+// proven for Teams above.
+function _dsMergeIncomingMasterFeats(remoteFeats){
+  const remote=Array.isArray(remoteFeats)?remoteFeats:Object.values(remoteFeats||{});
+  const local=loadMasterFeats();
+  const remoteIds=new Set(remote.map(f=>f&&f.id));
+  const localOnly=local.filter(f=>f&&!remoteIds.has(f.id));
+  return remote.concat(localOnly);
+}
+// Root-cause fix (Activities/Selection Process Data Loss — Cross-Session
+// Invisibility): featuresMap — the per-node checklist that actually drives
+// the right-panel "Activity" tab list — had NO receive path from Supabase
+// at all (only Firebase's now-dead code ever applied val.features). Every
+// session's featuresMap was populated purely from that browser's own
+// localStorage, forever — never hydrated from the server on initial
+// connect or updated via realtime, regardless of how many times the page
+// was reloaded. Wired in below (initial connect + realtime), merged by
+// feature id per node (same reasoning as _dsMergeIncomingMasterFeats)
+// rather than a blind overwrite, so a locally-added-but-not-yet-synced
+// Activity checklist item is never wiped either.
+function _dsMergeIncomingFeaturesMap(remoteFeatures){
+  const remote=remoteFeatures||{};
+  const merged={};
+  const allKeys=new Set([...Object.keys(remote),...Object.keys(featuresMap||{})]);
+  allKeys.forEach(nodeId=>{
+    const remoteList=Array.isArray(remote[nodeId])?remote[nodeId]:[];
+    const localList=Array.isArray((featuresMap||{})[nodeId])?featuresMap[nodeId]:[];
+    const remoteIds=new Set(remoteList.map(f=>f&&f.id));
+    const localOnly=localList.filter(f=>f&&!remoteIds.has(f.id));
+    const combined=remoteList.concat(localOnly);
+    if(combined.length)merged[nodeId]=combined;
+  });
+  return merged;
+}
 // Root-cause fix (Deleted Team Member Reappearing — Push-Side Guard): same
 // gap as _dsPruneTombstonedUsers above, for Teams — the merge protection
 // only guards the RECEIVE side. Pruning tombstoned team members out of the
@@ -9112,6 +9153,16 @@ const DEFAULT_SB_CONFIG={
 
 // Single switch for Testing vs Production Supabase table. Change APP_ENV only —
 // every real database operation reads TABLE_NAME derived from it below.
+// Root-cause fix (Cross-Device Data Invisibility): this was hardcoded to
+// 'TEST' from the very first version of this file — meaning every read/
+// write went to b2_tracker_data_Testing, a completely different table from
+// b2_tracker_data (the one this app's actual production data lives in, and
+// the one every other fix in this codebase has been diagnosed and verified
+// against). Any session running a build with this set to 'TEST' would
+// silently read and write a different table than a session running a
+// build with it set to 'PROD' — with no error, nothing to sync or merge,
+// because they were never looking at the same place. Set to 'PROD' so
+// there is exactly one table in play, matching production data.
 const APP_ENV = 'PROD'; // TEST or PROD
 const TABLE_NAME =
     APP_ENV === 'TEST'
@@ -10025,7 +10076,12 @@ async function _dsSupabaseConnectCore(url,anonKey,opts){
             if(val.milestones){localStorage.setItem(MILESTONES_KEY,JSON.stringify(Array.isArray(val.milestones)?val.milestones:Object.values(val.milestones)));changed=true;}
             if(val.templates){localStorage.setItem(TEMPLATES_KEY,JSON.stringify(Array.isArray(val.templates)?val.templates:Object.values(val.templates)));changed=true;}
             // Root-cause fix: same three previously-unsynced stores restored here too.
-            if(val.masterFeatures){saveMasterFeats(Array.isArray(val.masterFeatures)?val.masterFeatures:Object.values(val.masterFeatures));changed=true;}
+            if(val.masterFeatures){saveMasterFeats(_dsMergeIncomingMasterFeats(val.masterFeatures));changed=true;}
+            // Root-cause fix (Activities Data Loss — see _dsMergeIncomingFeaturesMap
+            // above): featuresMap was never updated from a realtime snapshot at all
+            // before this — the right-panel Activity tab list never received live
+            // updates from any other session, regardless of how long this tab stayed open.
+            if(val.features){featuresMap=_dsMergeIncomingFeaturesMap(val.features);saveFeatures();changed=true;}
             if(val.mom){saveMomList(Array.isArray(val.mom)?val.mom:Object.values(val.mom));changed=true;}
             if(val.mtgFeats){saveMtgFeats(Array.isArray(val.mtgFeats)?val.mtgFeats:Object.values(val.mtgFeats));changed=true;}
           }finally{
@@ -10073,7 +10129,10 @@ async function _dsSupabaseConnectCore(url,anonKey,opts){
       if(existingPayload.milestones)localStorage.setItem(MILESTONES_KEY,JSON.stringify(Array.isArray(existingPayload.milestones)?existingPayload.milestones:Object.values(existingPayload.milestones)));
       if(existingPayload.templates)localStorage.setItem(TEMPLATES_KEY,JSON.stringify(Array.isArray(existingPayload.templates)?existingPayload.templates:Object.values(existingPayload.templates)));
       // Root-cause fix: same three previously-unsynced stores restored on initial hydrate too.
-      if(existingPayload.masterFeatures)saveMasterFeats(Array.isArray(existingPayload.masterFeatures)?existingPayload.masterFeatures:Object.values(existingPayload.masterFeatures));
+      if(existingPayload.masterFeatures)saveMasterFeats(_dsMergeIncomingMasterFeats(existingPayload.masterFeatures));
+      // Root-cause fix (Activities Data Loss — see _dsMergeIncomingFeaturesMap
+      // above): featuresMap was never hydrated from Supabase at all before this.
+      if(existingPayload.features){featuresMap=_dsMergeIncomingFeaturesMap(existingPayload.features);saveFeatures();}
       if(existingPayload.mom)saveMomList(Array.isArray(existingPayload.mom)?existingPayload.mom:Object.values(existingPayload.mom));
       if(existingPayload.mtgFeats)saveMtgFeats(Array.isArray(existingPayload.mtgFeats)?existingPayload.mtgFeats:Object.values(existingPayload.mtgFeats));
       if(_sbDeduped){save();saveFeatures();}
@@ -16703,11 +16762,20 @@ function arCollectDeletionImpact(node){
   const nodeCounts=[0,1,2,3].map(()=>({active:0,completed:0}));
   const masterFeats=loadMasterFeats();
   let actActive=0,actCompleted=0;
+  // Task 1 (Quick-Resolve Active Blockers): the topmost active node in
+  // each branch — once resolved (cascades to everything beneath it), so
+  // there's no need to also separately list its now-moot descendants.
+  // Combined with blockerActivities below, this is exactly the actionable
+  // list shown in the confirm dialog so blockers can be cleared without
+  // hunting through the tree by hand.
+  const blockerNodes=[];
+  const blockerActivities=[];
   function activityRef(f){return f.submoduleId!=null?f.submoduleId:f.moduleId;}
   function tallyActivities(n){
     masterFeats.forEach(f=>{
       if(String(activityRef(f))!==String(n.id))return;
-      if((f.status||'')==='completed')actCompleted++; else actActive++;
+      if((f.status||'')==='completed')actCompleted++;
+      else{actActive++;blockerActivities.push({id:f.id,name:f.name,nodeName:n.name});}
     });
   }
   function walkDescendants(n){
@@ -16718,15 +16786,129 @@ function arCollectDeletionImpact(node){
         if(done)nodeCounts[lvl].completed++; else nodeCounts[lvl].active++;
       }
       if(lvl===2||lvl===3)tallyActivities(child);
+      if((lvl===1||lvl===2||lvl===3)&&calcProgress(child)!==100){
+        blockerNodes.push({id:child.id,name:child.name,level:lvl,levelLabel:levelNames[lvl]});
+        return; // don't descend further — completing this cascades to everything beneath it
+      }
       walkDescendants(child);
     });
   }
   const rootLvl=node.level||0;
   if(rootLvl===2||rootLvl===3)tallyActivities(node); // Activities linked directly to the node being deleted
   walkDescendants(node);
-  return{levelNames,nodeCounts,actActive,actCompleted};
+  return{levelNames,nodeCounts,actActive,actCompleted,blockerNodes,blockerActivities};
 }
-// Level-specific cascade descriptions, matching what will actually be removed with this node.
+// Root-cause fix (Deletion Validation Flow): removes every Activity
+// (masterFeats) linked to this node or any node in its subtree, plus their
+// meeting-feature bridge (mtgFeats) entries, featuresMap checklist copies,
+// and performance scores — otherwise Activities referencing a deleted
+// Task/Sub Task become orphaned records with broken references. Shared by
+// the full cascading delete (confirmDelete) and the single-item quick
+// delete used in the active-blockers list (arQuickDeleteNode), so both
+// paths clean up identically. Returns the count removed.
+function arCleanupActivitiesForSubtree(node){
+  if(!node)return 0;
+  const subtreeIds=new Set();
+  const rootLvl=node.level||0;
+  if(rootLvl===2||rootLvl===3)subtreeIds.add(node.id);
+  (function walk(n){(n.children||[]).forEach(c=>{subtreeIds.add(c.id);walk(c);});})(node);
+  const activityRef=f=>f.submoduleId!=null?f.submoduleId:f.moduleId;
+  const allFeats=loadMasterFeats();
+  const toDelete=allFeats.filter(f=>subtreeIds.has(activityRef(f)));
+  if(toDelete.length){
+    toDelete.forEach(f=>removeScoresForFeature(activityRef(f),f.id));
+    const keepFeats=allFeats.filter(f=>!subtreeIds.has(activityRef(f)));
+    saveMasterFeats(keepFeats);
+    subtreeIds.forEach(nid=>{delete featuresMap[nid];});
+    saveFeatures();
+    const toDeleteIds=new Set(toDelete.map(f=>f.id));
+    saveMtgFeats(loadMtgFeats().filter(r=>!toDeleteIds.has(r.featureId)));
+  }
+  return toDelete.length;
+}
+// Task 1 (Quick-Resolve Active Blockers): renders the interactive list of
+// what's currently blocking deletion (see arCollectDeletionImpact's
+// blockerNodes/blockerActivities) with a one-click way to resolve each —
+// Mark Complete cascades progress/linked Activities to done for that node
+// and everything beneath it; Delete removes just that one blocking item
+// (with the same tombstone + Activity cleanup as a full delete). Re-called
+// after every action so the list shrinks live without closing the dialog;
+// once nothing is left blocking, hands off to askDelete() to show whatever
+// comes next (the completed-data confirm, or the ordinary delete confirm).
+function arRenderActiveBlockers(nodeName){
+  const node=findNode(pendingDeleteId,data.nodes);
+  if(!node){closeConfirm();return;}
+  const impact=arCollectDeletionImpact(node);
+  if(!impact.blockerNodes.length&&!impact.blockerActivities.length){
+    askDelete(pendingDeleteId);
+    return;
+  }
+  let rows='';
+  impact.blockerNodes.forEach(b=>{
+    rows+=`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:10px;color:var(--muted);text-transform:uppercase;min-width:60px;flex-shrink:0">${eH(b.levelLabel)}</span>
+      <span style="flex:1;font-size:13px;color:var(--text);text-align:left">${eH(b.name)}</span>
+      <button class="btn btn-ghost btn-xs" onclick="arQuickCompleteNode(${b.id})">✓ Mark Complete</button>
+      <button class="btn btn-ghost btn-xs" style="color:var(--red);border-color:var(--red)" onclick="arQuickDeleteNode(${b.id})">🗑 Delete</button>
+    </div>`;
+  });
+  impact.blockerActivities.forEach(a=>{
+    rows+=`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:10px;color:var(--muted);text-transform:uppercase;min-width:60px;flex-shrink:0">Activity</span>
+      <span style="flex:1;font-size:13px;color:var(--text);text-align:left">${eH(a.name)} <span style="color:var(--muted2)">(${eH(a.nodeName)})</span></span>
+      <button class="btn btn-ghost btn-xs" onclick="arQuickCompleteActivity(${a.id})">✓ Mark Complete</button>
+    </div>`;
+  });
+  document.getElementById('confirm-msg').innerHTML=
+    `<b>"${eH(nodeName)}" cannot be deleted yet.</b><br>`+
+    `<span style="font-size:12px;color:var(--muted)">The items below are still active — resolve each one to continue. This list updates live as you go.</span>`+
+    `<div style="max-height:280px;overflow-y:auto;margin-top:10px;text-align:left">${rows}</div>`;
+}
+function arQuickCompleteNode(id){
+  const node=findNode(id,data.nodes);
+  if(!node)return;
+  const now=new Date().toISOString();
+  // Cascades completion to this node and everything beneath it — required
+  // for correctness since a Task/Project's own progress is often derived
+  // from its children (see calcProgress), not a directly-settable field.
+  (function cascade(n){
+    n.progress=100;
+    n.history=n.history||[];
+    n.history.push({ts:now,progress:100,note:'Marked complete (deletion cleanup)'});
+    (n.children||[]).forEach(cascade);
+  })(node);
+  const subtreeIds=new Set();
+  (function collect(n){subtreeIds.add(n.id);(n.children||[]).forEach(collect);})(node);
+  const feats=loadMasterFeats();
+  let feChanged=false;
+  feats.forEach(f=>{
+    const ref=f.submoduleId!=null?f.submoduleId:f.moduleId;
+    if(subtreeIds.has(ref)&&f.status!=='completed'){f.status='completed';f.done=true;feChanged=true;}
+  });
+  if(feChanged)saveMasterFeats(feats);
+  subtreeIds.forEach(nid=>{(featuresMap[nid]||[]).forEach(f=>{f.done=true;f.progress=100;});});
+  saveFeatures();
+  save();render();
+  arRenderActiveBlockers((findNode(pendingDeleteId,data.nodes)||{}).name||'');
+}
+function arQuickDeleteNode(id){
+  const node=findNode(id,data.nodes);
+  if(!node)return;
+  arCleanupActivitiesForSubtree(node);
+  removeNode(id,data.nodes);
+  recordDeletedNodeSubtreeTombstones(node);
+  save();render();
+  arRenderActiveBlockers((findNode(pendingDeleteId,data.nodes)||{}).name||'');
+}
+function arQuickCompleteActivity(id){
+  const feats=loadMasterFeats();
+  const f=feats.find(x=>x.id===id);
+  if(!f)return;
+  f.status='completed';f.done=true;
+  saveMasterFeats(feats);
+  render();
+  arRenderActiveBlockers((findNode(pendingDeleteId,data.nodes)||{}).name||'');
+}
 const _cascadeChildLabels=['Projects, all Tasks, all Sub Tasks/Activities, and all associated child records','Tasks, all Sub Tasks/Activities under them, and all associated child records','Sub Tasks/Activities and all associated child records','associated child records (if applicable)'];
 let pendingDeleteBlocked=false;
 let pendingDeleteNeedsSuperadminConfirm=false;
@@ -16754,26 +16936,17 @@ function askDelete(id){
   document.getElementById('confirm-title').textContent='Delete '+levelName;
 
   const impact=arCollectDeletionImpact(node);
-  // Active/incomplete descendants (Projects, Tasks, Sub Tasks) and Activities
-  // block deletion entirely — for everyone, no override — until resolved.
-  const activeLines=[];
-  [1,2,3].forEach(l=>{ // Project, Task, Sub Task — not Program (a Program is never itself a "descendant")
-    const n=impact.nodeCounts[l].active;
-    if(n>0){
-      const name=impact.levelNames[l]+(n===1?'':'s');
-      activeLines.push(`${n} ${name} ${n===1?'is':'are'} active. Delete ${n===1?'it':'them'} first.`);
-    }
-  });
-  if(impact.actActive>0){
-    activeLines.push(`${impact.actActive} Activit${impact.actActive===1?'y is':'ies are'} linked to active Tasks/Sub Tasks. Resolve ${impact.actActive===1?'it':'them'} first.`);
-  }
-  if(activeLines.length){
+  // Task 1 (Quick-Resolve Active Blockers): active/incomplete descendants
+  // and Activities still block deletion entirely for everyone, no
+  // override — but the blocked message now shows the actual list of what's
+  // blocking, each with a one-click way to resolve it (Mark Complete or
+  // Delete), instead of only a count with no way to act on it from here.
+  if(impact.blockerNodes.length||impact.blockerActivities.length){
     pendingDeleteBlocked=true;
-    document.getElementById('confirm-msg').innerHTML=
-      `<b>"${eH(node.name)}" cannot be deleted yet.</b><br><br>`+activeLines.join('<br>');
     if(yesBtn)yesBtn.style.display='none';
     if(ackWrap)ackWrap.style.display='none';
     document.getElementById('confirm-box').classList.add('open');
+    arRenderActiveBlockers(node.name);
     return;
   }
 
@@ -16862,34 +17035,10 @@ function confirmDelete(){
     if(!ackCb||!ackCb.checked)return; // button is disabled until checked, but guard anyway
   }
   const node=findNode(pendingDeleteId,data.nodes);
-  // Root-cause fix (Deletion Validation Flow): capture every id in the
-  // subtree BEFORE removeNode() runs, then sweep Activities (masterFeats),
-  // the meeting-feature assignment bridge (mtgFeats), and performance
-  // scores tied to them — otherwise Activities referencing a deleted
-  // Task/Sub Task become orphaned records with broken references, exactly
-  // the data-integrity issue this flow exists to prevent. Uses the same
-  // cleanup calls already used by single-Activity deletion (deleteFeat),
-  // just applied to every Activity affected by this cascade instead of one.
-  let deletedActivityCount=0;
-  if(node){
-    const subtreeIds=new Set();
-    const rootLvl=node.level||0;
-    if(rootLvl===2||rootLvl===3)subtreeIds.add(node.id);
-    (function walk(n){(n.children||[]).forEach(c=>{subtreeIds.add(c.id);walk(c);});})(node);
-    const activityRef=f=>f.submoduleId!=null?f.submoduleId:f.moduleId;
-    const allFeats=loadMasterFeats();
-    const toDelete=allFeats.filter(f=>subtreeIds.has(activityRef(f)));
-    if(toDelete.length){
-      deletedActivityCount=toDelete.length;
-      toDelete.forEach(f=>removeScoresForFeature(activityRef(f),f.id));
-      const keepFeats=allFeats.filter(f=>!subtreeIds.has(activityRef(f)));
-      saveMasterFeats(keepFeats);
-      subtreeIds.forEach(nid=>{delete featuresMap[nid];});
-      saveFeatures();
-      const toDeleteIds=new Set(toDelete.map(f=>f.id));
-      saveMtgFeats(loadMtgFeats().filter(r=>!toDeleteIds.has(r.featureId)));
-    }
-  }
+  // Root-cause fix (Deletion Validation Flow): sweep Activities/mtgFeats/
+  // scores for the whole subtree before removing it — see
+  // arCleanupActivitiesForSubtree() above.
+  const deletedActivityCount=arCleanupActivitiesForSubtree(node);
   removeNode(pendingDeleteId,data.nodes);
   // Root-cause fix (Orphaned Sub Tasks): tombstone the whole deleted subtree
   // so _dsMergeIncomingNodes can never resurrect it from a stale local/remote copy.

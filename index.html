@@ -1373,13 +1373,13 @@ body.readonly .icon-btn.tl-expand-details-btn{pointer-events:auto;opacity:1;}
       <span id="mytask-count" style="font-size:11px;color:var(--muted)"></span>
     </div>
     <div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px;background:var(--surface)">
-      <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:1200px">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:1260px">
         <thead>
           <tr style="background:var(--surface2)">
             <th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:100px">Meeting No.</th>
-            <th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:100px">Meeting Date</th>
+            <th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:130px">Meeting Date</th>
             <th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);min-width:260px">Task Name</th>
-            <th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:100px">Due Date</th>
+            <th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:130px">Due Date</th>
             <th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:110px">Assigned To</th>
             <th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:140px">Status</th>
             <th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:100px">Completed Date</th>
@@ -1398,17 +1398,22 @@ body.readonly .icon-btn.tl-expand-details-btn{pointer-events:auto;opacity:1;}
   <div class="page-body">
     <h2 style="font-family:var(--font-head);font-size:20px;font-weight:800;margin:0 0 4px">Job/Task History</h2>
     <p style="font-size:12px;color:var(--muted);margin:0 0 14px">Completed Tasks/Sub Tasks previously assigned to you</p>
-    <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px">
+    <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
       <span style="font-size:13px;color:var(--muted);flex-shrink:0">Search :</span>
       <input type="text" id="todo-search" oninput="renderJobTaskHistory()" placeholder="Search by task name or path…"
         style="width:280px;flex-shrink:0;padding:7px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:var(--font-body);font-size:13px;outline:none">
+      <span style="font-size:13px;color:var(--muted);flex-shrink:0;margin-left:6px">Project :</span>
+      <select id="todo-project-filter" onchange="jthFilterProject()"
+        style="width:200px;flex-shrink:0;padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:var(--font-body);font-size:13px">
+        <option value="all">All</option>
+      </select>
     </div>
     <div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px;background:var(--surface)">
       <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:760px">
         <thead>
           <tr style="background:var(--surface2)">
             <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border)">Task Name</th>
-            <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:260px">Path</th>
+            <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:180px">Project</th>
             <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:130px">Progress</th>
             <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:110px">Status</th>
             <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:130px">Completed Date</th>
@@ -1417,6 +1422,27 @@ body.readonly .icon-btn.tl-expand-details-btn{pointer-events:auto;opacity:1;}
         <tbody id="todo-tbody"><tr><td colspan="5" style="padding:20px;text-align:center;color:var(--muted2)">No completed tasks yet.</td></tr></tbody>
       </table>
     </div>
+  </div>
+</div>
+
+<!-- Job/Task History — Sub Tasks read-only popup (Task 2) -->
+<div class="modal-overlay" id="jth-subtasks-modal" onclick="jthCloseSubtasksModal(event)">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-head"><div><h2>Sub Tasks</h2><p id="jth-subtasks-sub"></p></div><button class="modal-close" onclick="jthCloseSubtasksModal()">✕</button></div>
+    <div class="modal-body">
+      <div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px;max-height:360px;overflow-y:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr style="background:var(--surface2);position:sticky;top:0">
+              <th style="padding:8px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border)">Sub Task</th>
+              <th style="padding:8px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);width:110px">Status</th>
+            </tr>
+          </thead>
+          <tbody id="jth-subtasks-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-ghost" onclick="jthCloseSubtasksModal()">Close</button></div>
   </div>
 </div>
 
@@ -4264,6 +4290,24 @@ function _dsMergeIncomingUsers(remoteUsers){
   const localOnly=local.filter(u=>u&&!remoteUsernames.has(u.username)&&!tombstones[u.username]);
   return remote.concat(localOnly);
 }
+// Root-cause fix (Deleted User Reappearing — Push-Side Guard): the merge
+// protection above only guards the RECEIVE side — it stops an incoming
+// snapshot from resurrecting a tombstoned user during a merge. It never
+// protected the SEND side. A device's in-memory user list can still hold
+// an entry that was already deleted and tombstoned elsewhere — because
+// this device hadn't yet pulled that deletion down — and any subsequent
+// save() on this device (adding/editing a Project, Task, Sub Task, or
+// Activity all call save(), which pushes the full current state, not just
+// what changed) would push that stale, full loadUsers() straight through
+// via _serialize(), silently re-introducing the deleted user into the
+// shared Supabase row — with no error, no conflict, nothing visible
+// anywhere. Pruning tombstoned users out of the list at the point of
+// serialization closes this gap, mirroring the same fix already applied
+// to the project tree (_dsPruneTombstonedNodes).
+function _dsPruneTombstonedUsers(users){
+  const tombstones=loadDeletedUsersTombstone();
+  return (users||[]).filter(u=>u&&!tombstones[u.username]);
+}
 function saveUsers(u){
   localStorage.setItem(AUTH_KEY,JSON.stringify(u));
   // Task Fix (Supabase Migration): every core data domain pushes through the same sync
@@ -5063,6 +5107,14 @@ function _dsMergeIncomingTeams(remoteTeams){
   const tombstones=loadDeletedTeamsTombstone();
   const localOnly=local.filter(m=>m&&!remoteIds.has(m.id)&&!tombstones[m.id]);
   return remote.concat(localOnly);
+}
+// Root-cause fix (Deleted Team Member Reappearing — Push-Side Guard): same
+// gap as _dsPruneTombstonedUsers above, for Teams — the merge protection
+// only guards the RECEIVE side. Pruning tombstoned team members out of the
+// list at the point of serialization closes the SEND side too.
+function _dsPruneTombstonedTeams(teams){
+  const tombstones=loadDeletedTeamsTombstone();
+  return (teams||[]).filter(t=>t&&!tombstones[t.id]);
 }
 let tmIdC=7000;
 function initTmId(){const t=loadTeams();t.forEach(m=>{if(m.id>=tmIdC)tmIdC=m.id+1;});}
@@ -8830,7 +8882,7 @@ const DEFAULT_SB_CONFIG={
 
 // Single switch for Testing vs Production Supabase table. Change APP_ENV only —
 // every real database operation reads TABLE_NAME derived from it below.
-const APP_ENV = 'PROD'; // TEST or PROD
+const APP_ENV = 'TEST'; // TEST or PROD
 const TABLE_NAME =
     APP_ENV === 'TEST'
         ? 'b2_tracker_data_Testing'
@@ -8885,16 +8937,20 @@ window._DS={
   /** Build the unified JSON structure from app state */
   _serialize(appData){
     return{
-      modules:appData.nodes||[],
+      // Root-cause fix (Deleted Sub Task Persists — Push-Side Guard): prune
+      // any tombstoned node out of the outgoing payload — see
+      // _dsPruneTombstonedNodes() for why this is required in addition to
+      // the existing receive-side merge protection.
+      modules:_dsPruneTombstonedNodes(appData.nodes||[]),
       deletedNodes:loadDeletedNodesTombstone(),
       features:Object.assign({},...Object.entries(featuresMap).map(([k,v])=>({[k]:v}))),
-      users:loadUsers(),
+      users:_dsPruneTombstonedUsers(loadUsers()),
       // Root-cause fix (Deleted User Reappearing): sync the deletion
       // tombstones themselves, not just the user list — see
       // mergeIncomingTombstones() for why this is required.
       deletedUsers:loadDeletedUsersTombstone(),
       meetings:loadMeetings(),
-      teams:loadTeams(),
+      teams:_dsPruneTombstonedTeams(loadTeams()),
       deletedTeams:loadDeletedTeamsTombstone(),
       milestones:loadMilestones(),
       templates:loadTemplates(),
@@ -11489,6 +11545,33 @@ function _dsMergeIncomingNodes(remoteNodes){
     });
   })(local);
   return remote;
+}
+// Root-cause fix (Deleted Sub Task Persists in Supabase — Previous Fix Was
+// Incomplete): the merge/tombstone protection above only guards the
+// RECEIVE side — it stops an incoming snapshot from resurrecting a
+// tombstoned node. It never protected the SEND side. A device whose
+// in-memory data.nodes still held a node that had already been deleted
+// and tombstoned elsewhere — because it hadn't yet applied that deletion
+// locally when its own next save fired for a completely unrelated reason
+// (editing anything else anywhere in the app) — would still push its
+// full, stale data.nodes straight through via _serialize(), silently
+// re-introducing the "deleted" node into the shared Supabase row under
+// its original (still-corrupted, e.g. mis-nested) position. That exactly
+// matches a node being deleted (tombstone recorded, confirmed in the
+// deletedNodes payload) yet still reappearing in the live table. Pruning
+// every tombstoned node (and its whole subtree) out of the tree at the
+// point of serialization — the single choke point every push (Firebase
+// and Supabase, manual export/sync included) already goes through — closes
+// this gap for good: a deletion can no longer be undone by a stale push,
+// from any device, for any reason.
+function _dsPruneTombstonedNodes(nodes){
+  const tombstones=loadDeletedNodesTombstone();
+  function prune(list){
+    return (list||[]).filter(n=>n&&!tombstones[n.id]).map(n=>
+      (n.children&&n.children.length)?Object.assign({},n,{children:prune(n.children)}):n
+    );
+  }
+  return prune(nodes);
 }
 // Task Fix (Phase Missing Children / No Expand-Collapse): some records were
 // stored with descendants (e.g. a Phase's Jobs) sitting as flat SIBLINGS in
@@ -17073,12 +17156,12 @@ function renderMyTaskTable(){
     const rowBg=i%2===1?'background:rgba(39,217,142,.06);':'';
     return `<tr style="border-top:1px solid var(--border);${rowBg}">
       <td style="padding:5px 10px;font-size:11px">${eH(myTaskFormatMeetingNo(t.meetingNumber))||'—'}</td>
-      <td style="padding:5px 10px">${t.meetingDate?eH(formatDateShort(t.meetingDate)):'—'}</td>
+      <td style="padding:5px 10px;white-space:nowrap">${t.meetingDate?eH(formatDateShort(t.meetingDate)):'—'}</td>
       <td style="padding:5px 10px;font-weight:500">
         <div style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word" title="${eH(t.taskName)}">${eH(t.taskName)}</div>
         ${pathHtml}
       </td>
-      <td style="padding:5px 10px">${t.assignedDate?eH(formatDateShort(t.assignedDate)):'—'}</td>
+      <td style="padding:5px 10px;white-space:nowrap">${t.assignedDate?eH(formatDateShort(t.assignedDate)):'—'}</td>
       <td style="padding:5px 10px">${assignedCell}</td>
       <td style="padding:5px 10px">
         <select onchange="${statusOnchange}" ${canEdit()?'':'disabled'} style="width:100%;min-width:110px;box-sizing:border-box;padding:4px 6px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-family:var(--font-body)">
@@ -17118,9 +17201,38 @@ function currentTodoTeamMemberIds(){
   const teams=loadTeams();
   return teams.filter(t=>String(t.code||'').trim().toLowerCase()===empNo).map(t=>t.id);
 }
+// Task 2 (Job/Task History — Project Filter): mirrors the same pattern
+// already used by the Timeline page's Project filter (tlFilterProjectId /
+// tlPopulateProjectFilter), but collects level-1 (Project) nodes across
+// every Program rather than the level-0 Programs themselves.
+let jthFilterProjectId='all';
+function jthPopulateProjectFilter(){
+  const sel=document.getElementById('todo-project-filter');
+  if(!sel)return;
+  const prevValue=jthFilterProjectId;
+  const projects=[];
+  (data.nodes||[]).forEach(program=>{
+    (program.children||[]).forEach(proj=>{
+      if((proj.level||0)===1)projects.push(proj);
+    });
+  });
+  let optsHtml='<option value="all">All</option>';
+  projects.forEach(p=>{optsHtml+=`<option value="${p.id}">${eH(p.name)}</option>`;});
+  sel.innerHTML=optsHtml;
+  const stillExists=prevValue==='all'||projects.some(p=>String(p.id)===prevValue);
+  jthFilterProjectId=stillExists?prevValue:'all';
+  sel.value=jthFilterProjectId;
+}
+function jthFilterProject(){
+  const sel=document.getElementById('todo-project-filter');
+  if(!sel)return;
+  jthFilterProjectId=sel.value;
+  renderJobTaskHistory();
+}
 function renderJobTaskHistory(){
   const tbody=document.getElementById('todo-tbody');
   if(!tbody)return;
+  jthPopulateProjectFilter();
   // Superadmin has no Employee No / Team Member record of its own (bootstrap
   // account) — sees every assignee's completed/overdue items instead of
   // being personally filtered, same reasoning as My Task.
@@ -17137,9 +17249,11 @@ function renderJobTaskHistory(){
   // included "past due" items, but a Task's planned End Date is very commonly
   // in the past even while it's still actively being worked on, which made
   // this page show ongoing/active work instead of true history.
-  function walk(nodes,path){
+  function walk(nodes,programName,projectId,projectName){
     (nodes||[]).forEach(n=>{
       const lvl=n.level||0;
+      if(lvl===0){programName=n.name;projectId=null;projectName='';}
+      else if(lvl===1){projectId=n.id;projectName=n.name;}
       if(lvl===2||lvl===3){
         const hasTeamMembers=Array.isArray(n.teamMembers)&&n.teamMembers.length;
         // Superadmin sees the complete history regardless of whether a
@@ -17155,34 +17269,45 @@ function renderJobTaskHistory(){
               const done=n.history.filter(h=>h.progress>=100).sort((a,b)=>new Date(b.ts)-new Date(a.ts))[0];
               if(done)completedDate=done.ts;
             }
+            // Task 2 (Sub Tasks Popup): only a Task (level 2) with actual
+            // Sub Task children is clickable — a leaf Sub Task or an
+            // Activity has nothing further to drill into.
+            const subtaskChildren=(n.children||[]).filter(c=>(c.level||0)===3);
             rows.push({
-              name:n.name,path,progress,
+              name:n.name,progress,
               status:'Completed',
-              dateLabel:completedDate?formatDateShort(completedDate):'—'
+              dateLabel:completedDate?formatDateShort(completedDate):'—',
+              programName,projectId,projectName,
+              nodeId:(lvl===2&&subtaskChildren.length)?n.id:null
             });
           }
         }
       }
-      if(n.children&&n.children.length)walk(n.children,path?path+' › '+n.name:n.name);
+      if(n.children&&n.children.length)walk(n.children,programName,projectId,projectName);
     });
   }
-  walk(data.nodes,'');
+  walk(data.nodes,'',null,'');
   // Activities: completed Features/Activities assigned via the meeting-feature
   // bridge or default assignment — the same "Source 3" resolution already
   // proven working in My Task's getMyTasks(), which this page was missing
   // entirely (Activities live in loadMasterFeats(), never as tree nodes, so
   // the walk() above can never see them). No due-date field exists on
   // Activities, so only Completed ones qualify here — no "Overdue" for this source.
-  function ancestorPath(nodeId){
-    const parts=[];
-    let curId=nodeId,guard=0;
+  // Resolves the Program/Project names for an Activity via its parent
+  // Task/Sub Task's own ancestor chain — same idea as the tree walk above,
+  // just starting from a known node instead of recursing down to it.
+  function ancestorProgramProject(nodeId){
+    let curId=nodeId,guard=0,projectId=null,projectName='',programName='';
+    let node=findNode(nodeId,data.nodes);
+    if(node&&(node.level||0)===1){projectId=node.id;projectName=node.name;}
     while(guard++<50){
       const par=findParent(curId,data.nodes,null);
       if(!par)break;
-      parts.unshift(par.name);
+      if((par.level||0)===1){projectId=par.id;projectName=par.name;}
+      if((par.level||0)===0){programName=par.name;}
       curId=par.id;
     }
-    return parts.join(' › ');
+    return{programName,projectId,projectName};
   }
   const _mtgFeats=loadMtgFeats();
   loadMasterFeats().forEach(f=>{
@@ -17196,25 +17321,32 @@ function renderJobTaskHistory(){
     (f.defaultAssignedTo||[]).forEach(mid=>assignedIds.add(mid));
     const isMine=isSuper?true:[...assignedIds].some(id=>myIds.includes(id));
     if(!isMine)return;
-    const parentPath=ancestorPath(pid);
+    const{programName,projectId,projectName}=ancestorProgramProject(pid);
     rows.push({
       name:f.name,
-      path:parentPath?parentPath+' › '+parentNode.name:parentNode.name,
       progress:100,
       status:'Completed',
-      dateLabel:'—'
+      dateLabel:'—',
+      programName,projectId,projectName,
+      nodeId:null // Activities have no Sub Tasks of their own
     });
   });
   const _q=(document.getElementById('todo-search')?.value||'').toLowerCase().trim();
-  const filteredRows=_q?rows.filter(r=>r.name.toLowerCase().includes(_q)||r.path.toLowerCase().includes(_q)):rows;
+  let filteredRows=_q?rows.filter(r=>r.name.toLowerCase().includes(_q)||r.projectName.toLowerCase().includes(_q)||r.programName.toLowerCase().includes(_q)):rows;
+  if(jthFilterProjectId!=='all')filteredRows=filteredRows.filter(r=>String(r.projectId)===jthFilterProjectId);
   if(!filteredRows.length){
-    tbody.innerHTML='<tr><td colspan="5" style="padding:20px;text-align:center;color:var(--muted2)">'+(_q?'No matching completed items.':'No completed tasks yet.')+'</td></tr>';
+    tbody.innerHTML='<tr><td colspan="5" style="padding:20px;text-align:center;color:var(--muted2)">'+(_q||jthFilterProjectId!=='all'?'No matching completed items.':'No completed tasks yet.')+'</td></tr>';
     return;
   }
-  tbody.innerHTML=filteredRows.map(r=>`
-    <tr>
+  tbody.innerHTML=filteredRows.map(r=>{
+    const clickable=r.nodeId?` onclick="jthOpenSubtasksModal(${r.nodeId})" style="cursor:pointer"`:'';
+    return `
+    <tr${clickable}>
       <td style="padding:9px 10px;border-bottom:1px solid var(--border);font-weight:500">${eH(r.name)}</td>
-      <td style="padding:9px 10px;border-bottom:1px solid var(--border);color:var(--muted);font-size:12px">${eH(r.path)}</td>
+      <td style="padding:9px 10px;border-bottom:1px solid var(--border)">
+        <div style="font-size:12px;color:var(--text)">${eH(r.projectName)||'—'}</div>
+        <div style="font-size:10px;color:var(--muted2);margin-top:1px">${eH(r.programName)}</div>
+      </td>
       <td style="padding:9px 10px;border-bottom:1px solid var(--border)">
         <div style="display:flex;align-items:center;gap:8px">
           <div class="node-progress-bar"><div class="node-progress-fill" style="width:${r.progress}%;background:${progressColor(r.progress)}"></div></div>
@@ -17223,8 +17355,32 @@ function renderJobTaskHistory(){
       </td>
       <td style="padding:9px 10px;border-bottom:1px solid var(--border)"><span class="badge ${r.status==='Completed'?'badge-green':'badge-red'}" style="display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700">${r.status}</span></td>
       <td style="padding:9px 10px;border-bottom:1px solid var(--border)">${r.dateLabel}</td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 }
+// Task 2 (Job/Task History — Sub Tasks Popup): read-only — no status
+// dropdown, no editing controls, just each Sub Task's name and current
+// status, matching the same pending/in progress/completed labeling used
+// on the My Task page's Status column (derived from calcProgress, no
+// separate status field).
+function jthOpenSubtasksModal(taskNodeId){
+  const node=findNode(taskNodeId,data.nodes);
+  if(!node)return;
+  document.getElementById('jth-subtasks-sub').textContent=node.name;
+  const subtasks=(node.children||[]).filter(c=>(c.level||0)===3);
+  const tbody=document.getElementById('jth-subtasks-tbody');
+  tbody.innerHTML=subtasks.map(st=>{
+    const p=calcProgress(st);
+    const label=p>=100?'Completed':(p>0?'In Progress':'Pending');
+    const cls=p>=100?'badge-green':(p>0?'badge-blue':'badge-amber');
+    return `<tr>
+      <td style="padding:8px 10px;border-bottom:1px solid var(--border);font-size:13px">${eH(st.name)}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid var(--border)"><span class="badge ${cls}" style="display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700">${label}</span></td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="2" style="padding:16px;text-align:center;color:var(--muted2)">No Sub Tasks.</td></tr>';
+  document.getElementById('jth-subtasks-modal').classList.add('open');
+}
+function jthCloseSubtasksModal(e){if(e&&e.target!==document.getElementById('jth-subtasks-modal'))return;document.getElementById('jth-subtasks-modal').classList.remove('open');}
 
 // the underlying node's own progress (0/50/100), consistent with how
 // progress already drives status everywhere else in Project Structure —

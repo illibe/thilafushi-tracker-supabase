@@ -161,6 +161,15 @@ header{background:var(--header-bg);border-bottom:1px solid var(--header-border);
 .node.lvl-2>.node-row .node-actions .icon-btn,
 .node.lvl-3>.node-row .node-actions .icon-btn{color:#000000;}
 .icon-btn:hover{background:var(--icon-btn-hover);color:var(--text);}
+/* Task 1 (Minimize/Collapse Button Visibility): the expand/collapse (▶)
+   toggle uses --node-toggle-color (white/near-white) globally, which reads
+   fine on the dark Program/Project rows but was nearly invisible against
+   the light Task/Sub Task row background. Same scoping approach as the
+   .node-actions .icon-btn fix directly above — reuses var(--muted), the
+   same grey already used for the Task Ribbon's own text, so it matches
+   the existing design rather than introducing a new color. */
+.node.lvl-2>.node-row .node-toggle:not(.leaf),
+.node.lvl-3>.node-row .node-toggle:not(.leaf){color:var(--muted);}
 .lvl-0>.node-row{background:var(--lvl0-bg);min-height:42px;}
 .lvl-0>.node-row .node-label{font-family:var(--font-head);font-size:14px;font-weight:700;color:#fff;}
 .lvl-1>.node-row{background:var(--lvl1-bg);min-height:36px;}
@@ -293,6 +302,12 @@ header{background:var(--header-bg);border-bottom:1px solid var(--header-border);
 .perm-label{font-size:12.5px;color:var(--text);flex:1;}
 .perm-desc{font-size:11px;color:var(--muted);margin-top:2px;}
 .perm-section-head{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted2);padding:12px 0 6px;border-bottom:2px solid var(--border);margin-bottom:2px;}
+/* Task 2 (Permission Page Redesign): tab buttons for the Permission Matrix modal */
+.perm-tab-btn{background:none;border:none;padding:9px 14px;font-size:12.5px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;font-family:var(--font-body)}
+.perm-tab-btn-active{color:var(--accent);border-bottom-color:var(--accent)}
+.perm-tree-toggle{cursor:pointer;user-select:none;display:inline-flex;align-items:center;gap:6px}
+.perm-tree-caret{display:inline-block;width:10px;font-size:10px;color:var(--muted);transition:transform .15s}
+.perm-tree-caret.open{transform:rotate(90deg)}
 .perm-section-head:not(:first-child){margin-top:10px;}
 /* ─── Forgot Password Panel ──────────────────────────────────────── */
 .login-forgot{font-size:12px;color:var(--accent);cursor:pointer;text-align:center;margin-top:6px;opacity:.8;}
@@ -2593,6 +2608,15 @@ create policy "public read/write (testing)" on b2_tracker_data
     <div class="modal-head"><div><h2 id="modal-title">Add Item</h2><p id="modal-subtitle">Fill in the details below</p></div><button class="modal-close" onclick="closeModal()">✕</button></div>
     <div class="modal-body">
       <div class="field"><label>Name</label><input type="text" id="field-name" placeholder="Enter name…"></div>
+      <!-- Task 1 (Move Project to Different Program — Super Admin only):
+           Project (level 1) rows only, and only visible to Super Admin.
+           Lets the Project — and everything inside it — be reassigned to a
+           different Program. See saveModal()/confirmMoveProject() for the
+           confirmation gate and the actual reparent logic. -->
+      <div class="field" id="field-move-program-wrap" style="display:none">
+        <label>Program</label>
+        <select id="field-move-program"></select>
+      </div>
       <!-- Task 1 (Asset Task Fields): Quantity/Budget — Task (level 2) only,
            and only when the parent Project's Type = 'Asset'. Hidden entirely
            for every other Project Type, and for any other level. -->
@@ -2751,6 +2775,24 @@ create policy "public read/write (testing)" on b2_tracker_data
       </label>
     </div>
     <div class="confirm-btns"><button class="btn btn-ghost" onclick="closeConfirm()">Cancel</button><button id="confirm-yes-btn" class="btn btn-danger" onclick="confirmDelete()">Yes, Delete</button></div>
+  </div>
+</div>
+
+<!-- Task 1 (Move Project to Different Program — Super Admin only): a
+     dedicated confirmation, separate from the shared delete confirm-box
+     above (which is delete-specific, both in styling and its hardcoded
+     onclick), since moving isn't a destructive action and deserves its
+     own clear wording. -->
+<div class="modal-overlay" id="move-project-confirm-modal" onclick="closeMoveProjectConfirm(event)">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-head"><div><h2>Move Project</h2></div><button class="modal-close" onclick="closeMoveProjectConfirm()">✕</button></div>
+    <div class="modal-body">
+      <p id="move-project-confirm-msg" style="font-size:13px;color:var(--text);line-height:1.6;margin:0"></p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeMoveProjectConfirm()">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmMoveProject()">Yes, Move Project</button>
+    </div>
   </div>
 </div>
 
@@ -3344,12 +3386,22 @@ create policy "public read/write (testing)" on b2_tracker_data
 
 <!-- PERMISSION MATRIX MODAL -->
 <div class="modal-overlay" id="perm-modal" onclick="closePermModal(event)">
-  <div class="modal" style="max-width:520px">
+  <div class="modal" style="max-width:920px">
     <div class="modal-head">
       <div><h2 id="perm-modal-title">Configure Permissions</h2><p id="perm-modal-sub" style="font-size:12px;color:var(--muted)"></p></div>
       <button class="modal-close" onclick="closePermModal()">✕</button>
     </div>
-    <div class="modal-body" id="perm-modal-body" style="max-height:60vh;overflow-y:auto"></div>
+    <!-- Task 2 (Permission Page Redesign): two tabs — General Permissions
+         (everything not tied to a specific Program/Project/Meeting) and
+         Programs & Projects (the Special Permissions tree + Meeting
+         Permissions), so the page stays manageable once there are many
+         Projects/Meetings instead of one long scrolling list. -->
+    <div style="display:flex;gap:6px;padding:0 20px;border-bottom:1px solid var(--border);flex-shrink:0">
+      <button id="perm-tab-btn-general" class="perm-tab-btn perm-tab-btn-active" onclick="permSwitchTab('general')">General Permissions</button>
+      <button id="perm-tab-btn-programs" class="perm-tab-btn" onclick="permSwitchTab('programs')">Programs &amp; Projects</button>
+    </div>
+    <div class="modal-body" id="perm-modal-body-general" style="max-height:64vh;overflow-y:auto"></div>
+    <div class="modal-body" id="perm-modal-body-programs" style="max-height:64vh;overflow-y:auto;display:none"></div>
     <div class="modal-foot">
       <button class="btn btn-ghost" onclick="closePermModal()">Cancel</button>
       <button class="btn btn-primary" onclick="savePermissions()">Save Permissions</button>
@@ -3707,6 +3759,7 @@ function openPermModal(username){
   if(!user)return;
   document.getElementById('perm-modal-title').textContent='Permissions: '+username;
   document.getElementById('perm-modal-sub').textContent='Role: '+user.role;
+  permSwitchTab('general');
   renderPermMatrix(user);
   document.getElementById('perm-modal').classList.add('open');
 }
@@ -3717,7 +3770,6 @@ function closePermModal(e){
 }
 
 function renderPermMatrix(user){
-  const body=document.getElementById('perm-modal-body');
   const p=user.permissions||getDefaultPerms(user.role);
   const d=DEFAULT_ADMIN_PERMS; // fallback defaults
   const isAdmin=user.role==='admin';
@@ -3775,35 +3827,112 @@ function renderPermMatrix(user){
   // (the ⤢ expand button on each row). This grants that separately.
   html+=toggle('mod_viewprojectdetails',!!mods.viewProjectDetails,'View Project Details','Can open the Project Detail Modal (⤢) from the Program Timeline');
 
-  // Task 2/3 (Special Permissions — Program-Level Access): dynamically lists
-  // every existing Program (level 0) from the Project Structure, each with
-  // its own View/Edit/Delete checkboxes. Left entirely unchecked for every
-  // Program (the default for a brand-new user, or one who's never had this
-  // configured) means this restriction simply isn't in effect — every
-  // existing broader permission above still applies exactly as it does
-  // today. The moment even one Program is explicitly granted View here,
-  // Project Structure narrows to only the Program(s) explicitly granted,
-  // per the requirement that ungranted Programs become inaccessible.
+  // Task 2 (Permission Page Redesign): Programs, Projects, Tasks and Sub
+  // Tasks now render as a nested, expand/collapse tree in the separate
+  // "Programs & Projects" tab (programsHtml) instead of flat lists mixed
+  // into the general permissions body — mirrors the same expand/collapse
+  // interaction already used on the Project Structure page.
   const pp=p.programPermissions||{};
+  const projp=p.projectPermissions||{};
+  const taskp=p.taskPermissions||{};
   const allPrograms=data.nodes.filter(n=>(n.level||0)===0);
-  html+=sectionHead('🏢 Special Permissions','Program-level access — cascades to all Projects/Tasks/Sub Tasks/Activities within it');
+  let programsHtml=sectionHead('🏢 🡒 📁 🡒 ✅ Special Permissions','Program/Project access, plus Task/Sub Task-level exclusions within a granted Project — every Project/Task/Sub Task stays visible to everyone; this only governs Add/Edit/Delete');
   if(!allPrograms.length){
-    html+='<div class="perm-row" style="color:var(--muted);font-size:12px">No Programs exist yet in Project Structure.</div>';
+    programsHtml+='<div class="perm-row" style="color:var(--muted);font-size:12px">No Programs exist yet in Project Structure.</div>';
   } else {
     allPrograms.forEach(prog=>{
       const gp=pp[prog.id]||{};
-      html+=`<div class="perm-row" style="flex-wrap:wrap;gap:10px 20px">
-        <div style="min-width:140px;font-weight:600;color:var(--text);font-size:12px">${eH(prog.name)}</div>
+      const projects=(prog.children||[]).filter(c=>(c.level||0)===1);
+      programsHtml+=`<div style="border-bottom:1px solid var(--border);padding:6px 0">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span class="perm-tree-toggle" onclick="permToggleTree(this.parentElement)" style="flex:1;min-width:160px">
+            <span class="perm-tree-caret">▶</span><span style="font-weight:700;font-size:13px">${eH(prog.name)}</span>
+          </span>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;min-width:60px" onclick="event.stopPropagation()">
+            <input type="checkbox" id="pgm_${prog.id}_view" ${gp.view?'checked':''} style="accent-color:var(--accent)"><span>View</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;min-width:60px" onclick="event.stopPropagation()">
+            <input type="checkbox" id="pgm_${prog.id}_edit" ${gp.edit?'checked':''} style="accent-color:var(--accent)"><span>Edit</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;min-width:60px" onclick="event.stopPropagation()">
+            <input type="checkbox" id="pgm_${prog.id}_delete" ${gp.delete?'checked':''} style="accent-color:var(--accent)"><span>Delete</span>
+          </label>
+        </div>
+        <div style="display:none;margin-left:18px;margin-top:6px">`;
+      if(!projects.length){
+        programsHtml+='<div style="color:var(--muted);font-size:12px;padding:4px 0">No Projects under this Program.</div>';
+      }
+      projects.forEach(proj=>{
+        const gpr=projp[proj.id]||{};
+        const tasks=(proj.children||[]).filter(c=>(c.level||0)===2);
+        programsHtml+=`<div style="border-top:1px dashed var(--border);padding:6px 0">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span class="perm-tree-toggle" onclick="permToggleTree(this.parentElement)" style="flex:1;min-width:140px">
+              <span class="perm-tree-caret">▶</span><span style="font-weight:600;font-size:12.5px">${eH(proj.name)}</span>
+            </span>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;min-width:60px" onclick="event.stopPropagation()">
+              <input type="checkbox" id="prj_${proj.id}_edit" ${gpr.edit?'checked':''} onchange="permCascadeProject(${proj.id},'edit')" style="accent-color:var(--accent)"><span>Edit</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;min-width:60px" onclick="event.stopPropagation()">
+              <input type="checkbox" id="prj_${proj.id}_delete" ${gpr.delete?'checked':''} onchange="permCascadeProject(${proj.id},'delete')" style="accent-color:var(--accent)"><span>Delete</span>
+            </label>
+          </div>
+          <div style="display:none;margin-left:18px;margin-top:4px">`;
+        if(!tasks.length){
+          programsHtml+='<div style="color:var(--muted);font-size:11.5px;padding:3px 0">No Tasks under this Project.</div>';
+        }
+        tasks.forEach(task=>{
+          const gt=taskp[task.id]||{};
+          const subtasks=(task.children||[]).filter(c=>(c.level||0)===3);
+          programsHtml+=`<div style="padding:3px 0;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span style="font-size:9px;color:var(--muted2);text-transform:uppercase;letter-spacing:.04em;min-width:52px">Task</span>
+            <span style="font-size:12px;flex:1;min-width:120px">${eH(task.name)}</span>
+            <label style="display:flex;align-items:center;gap:5px;font-size:11.5px;cursor:pointer;min-width:60px">
+              <input type="checkbox" class="perm-tsk-cb" id="tsk_${task.id}_edit" ${gt.edit!==false?'checked':''} ${gpr.edit?'':'disabled'} style="accent-color:var(--accent)"><span>Edit</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:11.5px;cursor:pointer;min-width:60px">
+              <input type="checkbox" class="perm-tsk-cb" id="tsk_${task.id}_delete" ${gt.delete!==false?'checked':''} ${gpr.delete?'':'disabled'} style="accent-color:var(--accent)"><span>Delete</span>
+            </label>
+          </div>`;
+          subtasks.forEach(sub=>{
+            const gs=taskp[sub.id]||{};
+            programsHtml+=`<div style="padding:3px 0 3px 22px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <span style="font-size:9px;color:var(--muted2);text-transform:uppercase;letter-spacing:.04em;min-width:52px">Sub Task</span>
+              <span style="font-size:12px;flex:1;min-width:120px">${eH(sub.name)}</span>
+              <label style="display:flex;align-items:center;gap:5px;font-size:11.5px;cursor:pointer;min-width:60px">
+                <input type="checkbox" class="perm-tsk-cb" id="tsk_${sub.id}_edit" ${gs.edit!==false?'checked':''} ${gpr.edit?'':'disabled'} style="accent-color:var(--accent)"><span>Edit</span>
+              </label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:11.5px;cursor:pointer;min-width:60px">
+                <input type="checkbox" class="perm-tsk-cb" id="tsk_${sub.id}_delete" ${gs.delete!==false?'checked':''} ${gpr.delete?'':'disabled'} style="accent-color:var(--accent)"><span>Delete</span>
+              </label>
+            </div>`;
+          });
+        });
+        programsHtml+='</div></div>';
+      });
+      programsHtml+='</div></div>';
+    });
+  }
+
+  // Feature (Meeting Permissions): flat list (Meetings have no sub-hierarchy),
+  // same unconfigured-is-unrestricted pattern, Edit/Delete per Meeting.
+  const meetp=p.meetingPermissions||{};
+  const allMeetings=loadMom();
+  programsHtml+=sectionHead('📅 Meeting Permissions','Restricts Edit/Delete of individual Meetings — unconfigured Meetings keep using the general Sprint & Meetings permissions above');
+  if(!allMeetings.length){
+    programsHtml+='<div class="perm-row" style="color:var(--muted);font-size:12px">No Meetings exist yet.</div>';
+  } else {
+    allMeetings.forEach(m=>{
+      const gm=meetp[m.id]||{};
+      const label=(m.number?m.number+' — ':'')+(m.date||'Meeting');
+      programsHtml+=`<div class="perm-row" style="flex-wrap:wrap;gap:10px 20px">
+        <div style="min-width:200px;font-weight:600;color:var(--text);font-size:12px">${eH(label)}</div>
         <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;min-width:70px">
-          <input type="checkbox" id="pgm_${prog.id}_view" ${gp.view?'checked':''} style="accent-color:var(--accent)">
-          <span style="color:var(--text)">View</span>
-        </label>
-        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;min-width:70px">
-          <input type="checkbox" id="pgm_${prog.id}_edit" ${gp.edit?'checked':''} style="accent-color:var(--accent)">
+          <input type="checkbox" id="mtg_${m.id}_edit" ${gm.edit?'checked':''} style="accent-color:var(--accent)">
           <span style="color:var(--text)">Edit</span>
         </label>
         <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;min-width:70px">
-          <input type="checkbox" id="pgm_${prog.id}_delete" ${gp.delete?'checked':''} style="accent-color:var(--accent)">
+          <input type="checkbox" id="mtg_${m.id}_delete" ${gm.delete?'checked':''} style="accent-color:var(--accent)">
           <span style="color:var(--text)">Delete</span>
         </label>
       </div>`;
@@ -3873,7 +4002,56 @@ function renderPermMatrix(user){
     html+=toggle('canEditRoadmap',pv('canEditRoadmap',d.canEditRoadmap),'Edit Milestones','Can modify existing roadmap milestones');
     html+=toggle('canDeleteRoadmap',pv('canDeleteRoadmap',d.canDeleteRoadmap),'Delete Milestones','Can delete roadmap milestones');
   }
-  body.innerHTML=html;
+  document.getElementById('perm-modal-body-general').innerHTML=html;
+  document.getElementById('perm-modal-body-programs').innerHTML=programsHtml;
+}
+// Task 2 (Permission Page Redesign): switches between the two tabs. Reset
+// to General every time the modal opens (see openPermModal) so it never
+// stays on whichever tab was last viewed for a different user.
+function permSwitchTab(tab){
+  const genBtn=document.getElementById('perm-tab-btn-general');
+  const progBtn=document.getElementById('perm-tab-btn-programs');
+  const genBody=document.getElementById('perm-modal-body-general');
+  const progBody=document.getElementById('perm-modal-body-programs');
+  const showGeneral=tab==='general';
+  genBtn.classList.toggle('perm-tab-btn-active',showGeneral);
+  progBtn.classList.toggle('perm-tab-btn-active',!showGeneral);
+  genBody.style.display=showGeneral?'':'none';
+  progBody.style.display=showGeneral?'none':'';
+}
+// Task 2 (Permission Page Redesign): generic expand/collapse for the
+// Program/Project rows — toggles the row's next sibling (its children
+// container) and flips the caret, without re-rendering anything (so
+// unsaved checkbox changes elsewhere in the tree are never lost).
+function permToggleTree(headerRowEl){
+  const bodyEl=headerRowEl.nextElementSibling;
+  if(!bodyEl)return;
+  const caret=headerRowEl.querySelector('.perm-tree-caret');
+  const isOpen=bodyEl.style.display!=='none';
+  bodyEl.style.display=isOpen?'none':'';
+  if(caret)caret.classList.toggle('open',!isOpen);
+}
+// Task 1 (Task/Sub Task-Level Access — Disable When Ungranted): live update
+// when a Project's Edit/Delete checkbox changes — every Task/Sub Task
+// checkbox for the same action, anywhere under this Project, is enabled
+// only while the Project itself grants that action. Matches the disabled
+// state already baked into the initial render (see renderPermMatrix); this
+// just keeps it in sync as the admin interacts with the Project checkbox.
+function permCascadeProject(projectId,action){
+  const projCb=document.getElementById('prj_'+projectId+'_'+action);
+  const enabled=projCb?projCb.checked:false;
+  const proj=findNode(projectId,data.nodes);
+  if(!proj)return;
+  (function walk(n){
+    (n.children||[]).forEach(c=>{
+      const lvl=c.level||0;
+      if(lvl===2||lvl===3){
+        const cb=document.getElementById('tsk_'+c.id+'_'+action);
+        if(cb)cb.disabled=!enabled;
+      }
+      walk(c);
+    });
+  })(proj);
 }
 
 function savePermissions(){
@@ -3912,6 +4090,58 @@ function savePermissions(){
     if(view||edit||del)_programPermissions[prog.id]={view,edit,delete:del};
   });
   user.permissions.programPermissions=_programPermissions;
+  // Feature (Project-Level Access): reads the per-Project Edit/Delete
+  // checkboxes generated dynamically from the current Project Structure,
+  // applying to both Admin and Guest users — same pattern as Program-level
+  // above, minus the View checkbox (Projects are always visible).
+  const _projectPermissions={};
+  // Task 1 (Task/Sub Task-Level Access): mirrors Project-level's "only
+  // store what differs from the default" approach — but here the default
+  // is checked/true (inherit the Project's grant), so an entry is only
+  // saved when a Task or Sub Task has actually been unchecked (excluded).
+  const _taskPermissions={};
+  data.nodes.filter(n=>(n.level||0)===0).forEach(prog=>{
+    (prog.children||[]).forEach(proj=>{
+      if((proj.level||0)!==1)return;
+      const editEl=document.getElementById('prj_'+proj.id+'_edit');
+      const delEl=document.getElementById('prj_'+proj.id+'_delete');
+      const edit=editEl?editEl.checked:false;
+      const del=delEl?delEl.checked:false;
+      if(edit||del)_projectPermissions[proj.id]={edit,delete:del};
+      // Reads every Task/Sub Task checkbox under this Project regardless of
+      // the Project's own state — a disabled checkbox still carries a real
+      // .checked value in the DOM, so a previously-saved exclusion survives
+      // even while its Project happens to be unchecked right now.
+      (function walk(n){
+        (n.children||[]).forEach(c=>{
+          const lvl=c.level||0;
+          if(lvl===2||lvl===3){
+            const tEditEl=document.getElementById('tsk_'+c.id+'_edit');
+            const tDelEl=document.getElementById('tsk_'+c.id+'_delete');
+            const tEdit=tEditEl?tEditEl.checked:true;
+            const tDel=tDelEl?tDelEl.checked:true;
+            if(!tEdit||!tDel)_taskPermissions[c.id]={edit:tEdit,delete:tDel};
+          }
+          walk(c);
+        });
+      })(proj);
+    });
+  });
+  user.permissions.projectPermissions=_projectPermissions;
+  user.permissions.taskPermissions=_taskPermissions;
+  // Feature (Meeting Permissions): reads per-Meeting Edit/Delete checkboxes,
+  // same pattern as Project-level (only store an entry when at least one is
+  // granted — an unlisted Meeting is denied once meetingPermissions is
+  // non-empty for this user, unrestricted while it's empty).
+  const _meetingPermissions={};
+  loadMom().forEach(m=>{
+    const editEl=document.getElementById('mtg_'+m.id+'_edit');
+    const delEl=document.getElementById('mtg_'+m.id+'_delete');
+    const edit=editEl?editEl.checked:false;
+    const del=delEl?delEl.checked:false;
+    if(edit||del)_meetingPermissions[m.id]={edit,delete:del};
+  });
+  user.permissions.meetingPermissions=_meetingPermissions;
   // My Task — Visibility: shared across Admin and Guest, saved unconditionally
   // (unlike the granular canX flags below, which only apply to Admin users).
   user.permissions.canViewAllTasks=checked('canViewAllTasks');
@@ -8882,7 +9112,7 @@ const DEFAULT_SB_CONFIG={
 
 // Single switch for Testing vs Production Supabase table. Change APP_ENV only —
 // every real database operation reads TABLE_NAME derived from it below.
-const APP_ENV = 'TEST'; // TEST or PROD
+const APP_ENV = 'PROD'; // TEST or PROD
 const TABLE_NAME =
     APP_ENV === 'TEST'
         ? 'b2_tracker_data_Testing'
@@ -10569,16 +10799,6 @@ function tlRenderChildrenList(nodes,depth){
       <span style="color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.04em;margin-right:6px">${label}</span>
       <span style="font-weight:600">${eH(n.name)}</span>${statusBadge}${progressBar}
     </div>`;
-    // Activities (features) attached directly to this node
-    const feats=featuresMap[n.id]||[];
-    if(feats.length){
-      html+='<div style="margin-left:18px">';
-      feats.forEach(f=>{
-        const st=f.activityStatus||(f.done?'completed':'todo');
-        html+=`<div style="padding:3px 0;font-size:12px;color:var(--muted)">🔹 Activity: <span style="color:var(--text);font-weight:600">${eH(f.name)}</span> — <span style="font-weight:700;color:var(--accent)">${tlActivityStatusLabel(st)}</span></div>`;
-      });
-      html+='</div>';
-    }
     if(n.children&&n.children.length){
       html+=tlRenderChildrenList(n.children,depth+1);
     }
@@ -10611,15 +10831,6 @@ function openTlExpand(id){
   html+=`<div style="font-weight:700;margin-bottom:4px">${eH(node.name)}</div>`;
   html+=`<div style="font-size:12px;color:var(--muted)">Project Start Date: <b style="color:var(--text)">${node.startDate?formatDateShort(node.startDate):'—'}</b> &nbsp;·&nbsp; Project End Date: <b style="color:var(--text)">${node.endDate?formatDateShort(node.endDate):'—'}</b></div>`;
   html+='</div>';
-  const feats=featuresMap[node.id]||[];
-  if(feats.length){
-    html+='<div style="margin-bottom:8px">';
-    feats.forEach(f=>{
-      const st=f.activityStatus||(f.done?'completed':'todo');
-      html+=`<div style="padding:3px 0;font-size:12px;color:var(--muted)">🔹 Activity: <span style="color:var(--text);font-weight:600">${eH(f.name)}</span> — <span style="font-weight:700;color:var(--accent)">${tlActivityStatusLabel(st)}</span></div>`;
-    });
-    html+='</div>';
-  }
   html+=tlRenderChildrenList(node.children||[],0);
   document.getElementById('tl-expand-body').innerHTML=html;
   // Task 1 (Default View): "Project View" is the default selected view each
@@ -11712,6 +11923,99 @@ function hasProgramPermission(programId,action){
   const pp=_programPermsForCurrentUser();
   if(!pp)return true; // not restricted for this user
   const entry=pp[programId];
+  return!!(entry&&entry[action]);
+}
+// Feature: Project-Level Access — a separate, independent restriction layer
+// from the Program-level "Special Permissions" above. Unlike Program-level
+// (which controls whether a Program and everything inside it is visible at
+// all), Project-level never hides anything — every Project stays visible
+// and readable to everyone, exactly as today. It only gates EDIT/DELETE:
+// adding, editing, or deleting a Task or Sub Task within a Project, or
+// editing/deleting the Project node itself, is blocked unless this user has
+// been explicitly granted that action for that specific Project. Left
+// unconfigured (the default for every existing and new user), this has no
+// effect whatsoever — identical to how Program-level permissions behave
+// when unconfigured. The two layers are independent and both apply when
+// both happen to be configured for the same user (Program-level still
+// governs visibility first; Project-level then governs editing within
+// whatever remains visible).
+function _projectPermsForCurrentUser(){
+  if(currentRole()==='superadmin')return null; // superadmin is never restricted
+  const session=getSession();
+  if(!session)return null;
+  const user=loadUsers().find(u=>u.username===session.username);
+  const pp=user&&user.permissions&&user.permissions.projectPermissions;
+  if(!pp||!Object.keys(pp).length)return null;
+  return pp;
+}
+function hasProjectPermission(projectId,action){
+  const pp=_projectPermsForCurrentUser();
+  if(!pp)return true; // not restricted for this user
+  const entry=pp[projectId];
+  return!!(entry&&entry[action]);
+}
+// Resolves the Project (level 1) that governs a given node's Project-Level
+// Access — the node itself if it IS a Project, or its nearest Project
+// ancestor if it's a Task/Sub Task. Returns true (unrestricted) for a
+// Program (level 0) or any node with no Project ancestor, since
+// Project-Level Access only applies once you're inside an actual Project —
+// Program-level actions remain governed solely by Special Permissions above.
+function canEditThisProjectScope(nodeId,action){
+  const projNode=depFindProjectAncestor(nodeId);
+  if(!projNode)return true;
+  if(!hasProjectPermission(projNode.id,action))return false;
+  // Task 1 (Task/Sub Task-Level Access): once the Project itself grants
+  // this action, a Task or Sub Task can still be individually excluded via
+  // its own more specific entry. Left unconfigured for a given node (the
+  // default), it simply inherits the Project's grant — identical to
+  // behaviour before this layer existed.
+  const node=findNode(nodeId,data.nodes);
+  if(node&&((node.level||0)===2||(node.level||0)===3)){
+    return hasTaskPermission(nodeId,action);
+  }
+  return true;
+}
+// Task 1 (Task/Sub Task-Level Access): same unconfigured-is-unrestricted
+// pattern as Program/Project-level above. Only reached once the ancestor
+// Project has already granted the action (see canEditThisProjectScope) —
+// this is a further narrowing, never a way to exceed the Project's grant.
+function _taskPermsForCurrentUser(){
+  if(currentRole()==='superadmin')return null;
+  const session=getSession();
+  if(!session)return null;
+  const user=loadUsers().find(u=>u.username===session.username);
+  const tp=user&&user.permissions&&user.permissions.taskPermissions;
+  if(!tp||!Object.keys(tp).length)return null;
+  return tp;
+}
+function hasTaskPermission(nodeId,action){
+  const tp=_taskPermsForCurrentUser();
+  if(!tp)return true; // never configured for this node — inherits the Project's grant
+  const entry=tp[nodeId];
+  if(!entry||!(action in entry))return true; // this specific node was never touched — inherits the Project's grant
+  return!!entry[action];
+}
+// Feature (Meeting Permissions): per-Meeting Edit/Delete, mirroring the
+// same unconfigured-is-unrestricted pattern used by every other Special
+// Permission above. Unlike Project-Level Access, there is no cascading
+// parent here — Meetings are a flat list, so this is checked directly
+// against the global canMeetingEdit()/canMeetingDelete() flags at the call
+// sites (see momEditIfAllowed/momModalDelete): meetingPermissions
+// unconfigured for this user falls back to those existing flags entirely
+// unchanged; configured, only the explicitly granted Meetings are allowed.
+function _meetingPermsForCurrentUser(){
+  if(currentRole()==='superadmin')return null;
+  const session=getSession();
+  if(!session)return null;
+  const user=loadUsers().find(u=>u.username===session.username);
+  const mp=user&&user.permissions&&user.permissions.meetingPermissions;
+  if(!mp||!Object.keys(mp).length)return null;
+  return mp;
+}
+function hasMeetingPermission(meetingId,action){
+  const mp=_meetingPermsForCurrentUser();
+  if(!mp)return null; // unconfigured — caller falls back to the existing global flag
+  const entry=mp[meetingId];
   return!!(entry&&entry[action]);
 }
 // Task 1 (Future Compatibility — Role-Based Project Visibility): every part
@@ -15827,6 +16131,12 @@ function saveFeat(){
 let modalMode=null,modalParentId=null,modalNodeLevel=0,modalEditId=null;
 function openAddModal(parentId,level){
   if(!canEdit())return;
+  // Feature (Project-Level Access): adding a Task/Sub Task INTO an existing
+  // Project is gated here — adding a brand-new top-level Project (level 1)
+  // under a Program is unaffected, since that Project doesn't exist yet to
+  // have a permission entry for; it remains governed by the existing
+  // Program-level Special Permissions / general canEdit() only, unchanged.
+  if(level>=2&&!canEditThisProjectScope(parentId,'edit')){toast('You do not have Edit permission for this Project','error');return;}
   modalMode='add';modalParentId=parentId;modalNodeLevel=level;modalEditId=null;
   pickedModuleMembers=[];renderModuleMemberChips();
   // Level names: 0=App(Project), 1=Phase, 2=Job, 3=Task (features added from right panel)
@@ -15836,6 +16146,9 @@ function openAddModal(parentId,level){
   document.getElementById('modal-save-btn').textContent='Add';
   document.getElementById('modal-delete-btn').style.display='none';
   document.getElementById('field-name').value='';
+  // Task 1 (Move Project — Super Admin only): never applicable when adding
+  // a brand-new node — there's nothing to "move" yet.
+  document.getElementById('field-move-program-wrap').style.display='none';
   document.getElementById('field-progress').value=0;
   document.getElementById('field-progress-val').textContent='0%';
   document.getElementById('field-remarks').value='';
@@ -15932,6 +16245,11 @@ function openEditModal(id){
   // explicitly granted Edit for is blocked here — the most direct
   // enforcement point for the "Program | View | Edit | Delete" table.
   if(lvl===0&&!hasProgramPermission(id,'edit')){toast('You do not have Edit permission for this Program','error');return;}
+  // Feature (Project-Level Access): editing the Project itself, or any Task/
+  // Sub Task within it, is gated by that Project's own Edit grant — checked
+  // separately from the Program-level check above (which only governs the
+  // Program node itself).
+  if(lvl>=1&&!canEditThisProjectScope(id,'edit')){toast('You do not have Edit permission for this Project','error');return;}
   modalMode='edit';modalEditId=id;
   pickedModuleMembers=[...(node.teamMembers||[])];renderModuleMemberChips();
   const levelNames=['Program','Project','Task','Sub Task','Activity'];
@@ -15942,6 +16260,18 @@ function openEditModal(id){
   delBtn.style.display='inline-flex';
   delBtn.textContent='Delete '+levelNames[lvl];
   document.getElementById('field-name').value=node.name;
+  // Task 1 (Move Project to Different Program — Super Admin only): only
+  // shown for a Project (level 1) row, and only to Super Admin.
+  const moveWrap=document.getElementById('field-move-program-wrap');
+  if(lvl===1&&currentRole()==='superadmin'){
+    const moveSel=document.getElementById('field-move-program');
+    const curParent=findParent(id,data.nodes,null);
+    moveSel.innerHTML=data.nodes.filter(n=>(n.level||0)===0)
+      .map(prog=>`<option value="${prog.id}"${curParent&&prog.id===curParent.id?' selected':''}>${eH(prog.name)}</option>`).join('');
+    moveWrap.style.display='';
+  } else {
+    moveWrap.style.display='none';
+  }
   document.getElementById('field-progress').value=node.progress;
   document.getElementById('field-progress-val').textContent=node.progress+'%';
   document.getElementById('field-remarks').value=node.remarks||'';
@@ -16171,8 +16501,28 @@ function validatePhaseBudget(){
   return result.valid;
 }
 
+let _pendingMoveConfirmed=false;
 function saveModal(){
   if(!canEdit())return;
+  // Task 1 (Move Project to Different Program — Super Admin only): if the
+  // Program selection changed for a Project (level 1) being edited by a
+  // Super Admin, confirm first — the actual move only happens once
+  // confirmMoveProject() re-invokes this same function.
+  if(modalMode==='edit'&&!_pendingMoveConfirmed){
+    const _node0=findNode(modalEditId,data.nodes);
+    if(_node0&&(_node0.level||0)===1&&currentRole()==='superadmin'){
+      const moveSel=document.getElementById('field-move-program');
+      if(moveSel){
+        const newProgramId=parseInt(moveSel.value);
+        const oldProgram=findParent(_node0.id,data.nodes,null);
+        const newProgram=findNode(newProgramId,data.nodes);
+        if(oldProgram&&newProgram&&newProgramId!==oldProgram.id){
+          openMoveProjectConfirm(_node0,oldProgram,newProgram);
+          return;
+        }
+      }
+    }
+  }
   const name=document.getElementById('field-name').value.trim();
   if(!name){document.getElementById('field-name').focus();return;}
   if(!validatePhaseDates()){toast(document.getElementById('field-dates-error').textContent,'error');return;}
@@ -16234,6 +16584,30 @@ function saveModal(){
     toast(_appliedTplName?('Added: '+name+' — template "'+_appliedTplName+'" applied'):('Added: '+name));
   } else {
     const node=findNode(modalEditId,data.nodes);
+    // Task 1 (Move Project to Different Program — Super Admin only):
+    // reparent the Project node itself — every Task/Sub Task/Activity
+    // inside it moves as one unit since they're all this node's own
+    // descendants; their ids, Team assignments, Dependencies, Activities
+    // (linked by node id, not by path), and every Permission entry keyed
+    // by this Project's own id are all completely unaffected by where in
+    // the tree the node sits. Only the Program-level "who can even see
+    // this" visibility, if Special Permissions is configured, changes as
+    // a natural, intended consequence of belonging to a different Program.
+    if((node.level||0)===1&&currentRole()==='superadmin'){
+      const moveSel=document.getElementById('field-move-program');
+      if(moveSel){
+        const newProgramId=parseInt(moveSel.value);
+        const oldProgram=findParent(node.id,data.nodes,null);
+        const newProgram=findNode(newProgramId,data.nodes);
+        if(oldProgram&&newProgram&&newProgramId!==oldProgram.id){
+          oldProgram.children=(oldProgram.children||[]).filter(c=>c.id!==node.id);
+          if(!newProgram.children)newProgram.children=[];
+          newProgram.children.push(node);
+          newProgram.open=true;
+          node.history.push({ts:new Date().toISOString(),progress:node.progress,note:'Moved from Program "'+oldProgram.name+'" to "'+newProgram.name+'"'});
+        }
+      }
+    }
     const note=document.getElementById('field-update-note').value.trim();
     const changed=node.progress!==progress||node.name!==name||node.remarks!==remarks||!!note;
     let _tplEditNote=null;
@@ -16279,6 +16653,26 @@ function saveModal(){
   // any Project Structure change, not only the Phase history Add button.
   if(typeof renderWorkflowProgress==='function')renderWorkflowProgress();
   document.getElementById('modal').classList.remove('open');
+  _pendingMoveConfirmed=false;
+}
+// Task 1 (Move Project to Different Program — Super Admin only): the
+// confirmation shown before applying the move — separate from the shared
+// delete confirm-box (delete-specific, both in styling and its hardcoded
+// onclick), since moving isn't a destructive action.
+function openMoveProjectConfirm(node,oldProgram,newProgram){
+  document.getElementById('move-project-confirm-msg').innerHTML=
+    'Move <b>'+eH(node.name)+'</b> from <b>'+eH(oldProgram.name)+'</b> to <b>'+eH(newProgram.name)+'</b>?<br><br>'+
+    'This moves the entire Project — every Task, Sub Task, and Activity inside it — to the new Program. Nothing is deleted or duplicated; only where it sits in the hierarchy changes.';
+  document.getElementById('move-project-confirm-modal').classList.add('open');
+}
+function closeMoveProjectConfirm(e){
+  if(e&&e.target!==document.getElementById('move-project-confirm-modal'))return;
+  document.getElementById('move-project-confirm-modal').classList.remove('open');
+}
+function confirmMoveProject(){
+  _pendingMoveConfirmed=true;
+  document.getElementById('move-project-confirm-modal').classList.remove('open');
+  saveModal();
 }
 let pendingDeleteId=null;
 // Task 1 (Template Management): mirrors pendingDeleteId, but for Templates —
@@ -16344,6 +16738,9 @@ function askDelete(id){
   // hasn't been explicitly granted Delete for, when Special Permissions is
   // in effect for them.
   if((node.level||0)===0&&!hasProgramPermission(id,'delete')){toast('You do not have Delete permission for this Program','error');return;}
+  // Feature (Project-Level Access): deleting the Project itself, or any
+  // Task/Sub Task within it, is gated by that Project's own Delete grant.
+  if((node.level||0)>=1&&!canEditThisProjectScope(id,'delete')){toast('You do not have Delete permission for this Project','error');return;}
   pendingDeleteId=id;
   pendingDeleteBlocked=false;
   pendingDeleteNeedsSuperadminConfirm=false;
@@ -16665,7 +17062,12 @@ function momActionDelete(){
 // governs Sprint Meeting edits) so Meeting Management edits go through the
 // same permission check rather than a brand-new one.
 function momEditIfAllowed(id){
-  if(!canMeetingEdit()){toast('You do not have permission to edit meetings','error');return;}
+  // Feature (Meeting Permissions): per-Meeting override, when configured for
+  // this user, takes precedence over the existing global canMeetingEdit()
+  // flag — unconfigured, behaviour is completely unchanged.
+  const override=hasMeetingPermission(id,'edit');
+  const allowed=override!==null?override:canMeetingEdit();
+  if(!allowed){toast('You do not have permission to edit meetings','error');return;}
   openMomModal(id);
 }
 // No longer called from the UI (superseded by momModalDelete inside the
@@ -17804,6 +18206,11 @@ function saveMomMeeting(){
 // does not affect any other meeting record.
 function momModalDelete(){
   if(!momEditId)return;
+  // Feature (Meeting Permissions): only enforced once meetingPermissions has
+  // been explicitly configured for this user — this modal had no delete gate
+  // at all before this feature existed, so leaving it unconfigured must stay
+  // exactly as unrestricted as it always was for every existing user.
+  if(hasMeetingPermission(momEditId,'delete')===false){toast('You do not have permission to delete this meeting','error');return;}
   if(!confirm('Delete this meeting permanently? This cannot be undone.'))return;
   const list=loadMom().filter(m=>m.id!==momEditId);
   saveMomList(list);
@@ -17844,7 +18251,11 @@ function openMomViewModal(id){
     <div style="margin-bottom:14px"><span style="color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase">Minutes</span>${itemsHtml}</div>
     <div><span style="color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase">Minutes File</span><div style="margin-top:4px">${pdfHtml}</div></div>
   `;
-  document.getElementById('mom-view-edit-btn').style.display=canMeetingEdit()?'inline-flex':'none';
+  // Feature (Meeting Permissions): the button's visibility now also
+  // respects a per-Meeting override when configured, matching the actual
+  // gate momEditIfAllowed() applies when clicked.
+  const _momEditOverride=hasMeetingPermission(id,'edit');
+  document.getElementById('mom-view-edit-btn').style.display=(_momEditOverride!==null?_momEditOverride:canMeetingEdit())?'inline-flex':'none';
   document.getElementById('mom-view-modal').classList.add('open');
 }
 function closeMomViewModal(e){if(e&&e.target.id!=='mom-view-modal')return;document.getElementById('mom-view-modal').classList.remove('open');}

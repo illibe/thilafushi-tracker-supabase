@@ -4042,8 +4042,15 @@ function permCascadeProject(projectId,action){
   const enabled=projCb?projCb.checked:false;
   const proj=findNode(projectId,data.nodes);
   if(!proj)return;
+  // Root-cause fix (Permission Save — Page Stuck / User Disappears): same
+  // cycle guard as savePermissions()'s walk() — this fires on every
+  // checkbox click while the modal is open, not just on Save, so it needs
+  // the same protection.
+  const _walkedIds=new Set();
   (function walk(n){
     (n.children||[]).forEach(c=>{
+      if(_walkedIds.has(c.id))return;
+      _walkedIds.add(c.id);
       const lvl=c.level||0;
       if(lvl===2||lvl===3){
         const cb=document.getElementById('tsk_'+c.id+'_'+action);
@@ -4112,8 +4119,22 @@ function savePermissions(){
       // the Project's own state — a disabled checkbox still carries a real
       // .checked value in the DOM, so a previously-saved exclusion survives
       // even while its Project happens to be unchecked right now.
+      // Root-cause fix (Permission Save — Page Stuck / User Disappears):
+      // this walk had no protection against a cycle in the tree (a node
+      // whose own descendant chain loops back to it) — and this exact
+      // production data has already been found to have corruption from
+      // past bugs (orphaned/mis-nested nodes). An unbounded recursive walk
+      // hitting a cycle runs away, freezes the tab, and eventually throws
+      // a stack-overflow exception partway through this function — which
+      // aborts execution before saveUsers() below ever runs, so the
+      // permission (and any other pending) changes are silently never
+      // persisted. A visited-id guard makes this safe regardless of tree
+      // shape, with zero effect on a normal, well-formed tree.
+      const _walkedIds=new Set();
       (function walk(n){
         (n.children||[]).forEach(c=>{
+          if(_walkedIds.has(c.id))return;
+          _walkedIds.add(c.id);
           const lvl=c.level||0;
           if(lvl===2||lvl===3){
             const tEditEl=document.getElementById('tsk_'+c.id+'_edit');
@@ -5429,20 +5450,55 @@ function _dsMergeIncomingTeams(remoteTeams){
   const localOnly=local.filter(m=>m&&!remoteIds.has(m.id)&&!tombstones[m.id]);
   return remote.concat(localOnly);
 }
-// Root-cause fix (Activities/Selection Process Data Loss — Cross-Session
-// Invisibility): masterFeatures had a receive path (unlike featuresMap
-// below) but, like modules/users/teams before this fix, applied every
-// incoming snapshot as an unconditional overwrite — a locally-added
-// Activity not yet reflected in a lagging snapshot (this device's own
-// realtime echo, or another session's concurrent save) would be silently
-// wiped, and the next save() from this device would persist that
-// regression, permanently discarding it. Same merge-by-id pattern already
-// proven for Teams above.
+// Root-cause fix (Activity Deletion Not Sticking): mirrors the tombstone
+// pattern already used for nodes/users/teams. The merge-protection above
+// (added to stop newly-added Activities from being wiped by a lagging
+// snapshot) had no way to tell "just added, not yet synced" apart from
+// "just deleted, not yet reflected in a lagging snapshot" — so a deleted
+// draft Activity looked identical to a new one, and the very next merge
+// treated it as local-only-not-yet-synced and resurrected it. That's
+// exactly "disappears temporarily, then reappears" — and, when the merge
+// cycle fires quickly enough, can look like the delete never worked at all.
+const DELETED_ACTIVITIES_KEY='b2_deleted_activities_v1';
+function loadDeletedActivitiesTombstone(){
+  try{
+    const raw=JSON.parse(localStorage.getItem(DELETED_ACTIVITIES_KEY))||{};
+    const cutoff=Date.now()-48*60*60*1000;
+    let changed=false;
+    Object.keys(raw).forEach(id=>{
+      if(new Date(raw[id]).getTime()<cutoff){delete raw[id];changed=true;}
+    });
+    if(changed)localStorage.setItem(DELETED_ACTIVITIES_KEY,JSON.stringify(raw));
+    return raw;
+  }catch(e){return{};}
+}
+function recordDeletedActivityTombstone(id){
+  try{
+    const raw=loadDeletedActivitiesTombstone();
+    raw[id]=new Date().toISOString();
+    localStorage.setItem(DELETED_ACTIVITIES_KEY,JSON.stringify(raw));
+  }catch(e){}
+}
+function mergeIncomingActivityTombstones(remoteDeleted){
+  if(!remoteDeleted||typeof remoteDeleted!=='object')return;
+  try{
+    const local=loadDeletedActivitiesTombstone();
+    let changed=false;
+    Object.keys(remoteDeleted).forEach(id=>{
+      if(!local[id]||new Date(remoteDeleted[id])>new Date(local[id])){
+        local[id]=remoteDeleted[id];
+        changed=true;
+      }
+    });
+    if(changed)localStorage.setItem(DELETED_ACTIVITIES_KEY,JSON.stringify(local));
+  }catch(e){}
+}
 function _dsMergeIncomingMasterFeats(remoteFeats){
   const remote=Array.isArray(remoteFeats)?remoteFeats:Object.values(remoteFeats||{});
   const local=loadMasterFeats();
   const remoteIds=new Set(remote.map(f=>f&&f.id));
-  const localOnly=local.filter(f=>f&&!remoteIds.has(f.id));
+  const tombstones=loadDeletedActivitiesTombstone();
+  const localOnly=local.filter(f=>f&&!remoteIds.has(f.id)&&!tombstones[f.id]);
   return remote.concat(localOnly);
 }
 // Root-cause fix (Activities/Selection Process Data Loss — Cross-Session
@@ -5459,16 +5515,38 @@ function _dsMergeIncomingMasterFeats(remoteFeats){
 function _dsMergeIncomingFeaturesMap(remoteFeatures){
   const remote=remoteFeatures||{};
   const merged={};
+  const tombstones=loadDeletedActivitiesTombstone();
   const allKeys=new Set([...Object.keys(remote),...Object.keys(featuresMap||{})]);
   allKeys.forEach(nodeId=>{
     const remoteList=Array.isArray(remote[nodeId])?remote[nodeId]:[];
     const localList=Array.isArray((featuresMap||{})[nodeId])?featuresMap[nodeId]:[];
     const remoteIds=new Set(remoteList.map(f=>f&&f.id));
-    const localOnly=localList.filter(f=>f&&!remoteIds.has(f.id));
+    const localOnly=localList.filter(f=>f&&!remoteIds.has(f.id)&&!tombstones[f.id]);
     const combined=remoteList.concat(localOnly);
     if(combined.length)merged[nodeId]=combined;
   });
   return merged;
+}
+// Root-cause fix (Activity Deletion Not Sticking — Push-Side Guard): mirrors
+// _dsPruneTombstonedNodes/_dsPruneTombstonedUsers/_dsPruneTombstonedTeams —
+// the merge protection above only guards the RECEIVE side. A device whose
+// in-memory masterFeats/featuresMap still holds an Activity that was
+// already deleted and tombstoned elsewhere would still push its stale copy
+// straight through via _serialize(), silently re-introducing it. Pruning
+// tombstoned Activities out at the point of serialization closes the SEND
+// side too, for both stores.
+function _dsPruneTombstonedMasterFeats(feats){
+  const tombstones=loadDeletedActivitiesTombstone();
+  return (feats||[]).filter(f=>f&&!tombstones[f.id]);
+}
+function _dsPruneTombstonedFeaturesMap(featMap){
+  const tombstones=loadDeletedActivitiesTombstone();
+  const pruned={};
+  Object.keys(featMap||{}).forEach(nodeId=>{
+    const list=(featMap[nodeId]||[]).filter(f=>f&&!tombstones[f.id]);
+    if(list.length)pruned[nodeId]=list;
+  });
+  return pruned;
 }
 // Root-cause fix (Deleted Team Member Reappearing — Push-Side Guard): same
 // gap as _dsPruneTombstonedUsers above, for Teams — the merge protection
@@ -9315,7 +9393,7 @@ window._DS={
       // the existing receive-side merge protection.
       modules:_dsStripOpenState(_dsPruneTombstonedNodes(appData.nodes||[])),
       deletedNodes:loadDeletedNodesTombstone(),
-      features:Object.assign({},...Object.entries(featuresMap).map(([k,v])=>({[k]:v}))),
+      features:_dsPruneTombstonedFeaturesMap(Object.assign({},...Object.entries(featuresMap).map(([k,v])=>({[k]:v})))),
       users:_dsPruneTombstonedUsers(loadUsers()),
       // Root-cause fix (Deleted User Reappearing): sync the deletion
       // tombstones themselves, not just the user list — see
@@ -9335,7 +9413,11 @@ window._DS={
       // part of the cloud backup — meaning clearing local browser storage
       // erased them permanently with no way to recover, while everything
       // else above came back fine on the next sync/reload.
-      masterFeatures:loadMasterFeats(), // Task Board source — Activities
+      masterFeatures:_dsPruneTombstonedMasterFeats(loadMasterFeats()), // Task Board source — Activities
+      // Root-cause fix (Activity Deletion Not Sticking): sync the deletion
+      // tombstones themselves, not just the pruned lists above — see
+      // mergeIncomingActivityTombstones() for why this is required.
+      deletedActivities:loadDeletedActivitiesTombstone(),
       mom:loadMom(),                   // Meeting Minutes — My Tasks' Meeting source
       mtgFeats:loadMtgFeats(),         // Meeting↔Activity assignment bridge
       meta:{lastUpdated:appData.lastUpdated,exportedAt:new Date().toISOString()}
@@ -10172,6 +10254,10 @@ async function _dsSupabaseConnectCore(url,anonKey,opts){
             if(val.milestones){localStorage.setItem(MILESTONES_KEY,JSON.stringify(Array.isArray(val.milestones)?val.milestones:Object.values(val.milestones)));changed=true;}
             if(val.templates){localStorage.setItem(TEMPLATES_KEY,JSON.stringify(Array.isArray(val.templates)?val.templates:Object.values(val.templates)));changed=true;}
             // Root-cause fix: same three previously-unsynced stores restored here too.
+            // Root-cause fix (Activity Deletion Not Sticking): merge the activity
+            // deletion tombstones BEFORE applying masterFeatures/features, same
+            // ordering already used for nodes/users/teams above.
+            mergeIncomingActivityTombstones(val.deletedActivities);
             if(val.masterFeatures){saveMasterFeats(_dsMergeIncomingMasterFeats(val.masterFeatures));changed=true;}
             // Root-cause fix (Activities Data Loss — see _dsMergeIncomingFeaturesMap
             // above): featuresMap was never updated from a realtime snapshot at all
@@ -10225,6 +10311,9 @@ async function _dsSupabaseConnectCore(url,anonKey,opts){
       if(existingPayload.milestones)localStorage.setItem(MILESTONES_KEY,JSON.stringify(Array.isArray(existingPayload.milestones)?existingPayload.milestones:Object.values(existingPayload.milestones)));
       if(existingPayload.templates)localStorage.setItem(TEMPLATES_KEY,JSON.stringify(Array.isArray(existingPayload.templates)?existingPayload.templates:Object.values(existingPayload.templates)));
       // Root-cause fix: same three previously-unsynced stores restored on initial hydrate too.
+      // Root-cause fix (Activity Deletion Not Sticking): merge tombstones first,
+      // same ordering as the realtime handler above.
+      mergeIncomingActivityTombstones(existingPayload.deletedActivities);
       if(existingPayload.masterFeatures)saveMasterFeats(_dsMergeIncomingMasterFeats(existingPayload.masterFeatures));
       // Root-cause fix (Activities Data Loss — see _dsMergeIncomingFeaturesMap
       // above): featuresMap was never hydrated from Supabase at all before this.
@@ -16125,6 +16214,9 @@ function deleteFeat(id){
   }
   removeScoresForFeature(selectedId,id);
   featuresMap[selectedId]=(featuresMap[selectedId]||[]).filter(x=>x.id!==id);
+  // Root-cause fix (Activity Deletion Not Sticking): record a tombstone
+  // before saving — see mergeIncomingActivityTombstones/DELETED_ACTIVITIES_KEY.
+  recordDeletedActivityTombstone(id);
   // Clean up master features table
   const _mAll=loadMasterFeats().filter(m=>m.id!==id);
   saveMasterFeats(_mAll);

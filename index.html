@@ -4487,6 +4487,24 @@ function recordDeletedUserTombstone(username){
     localStorage.setItem(DELETED_USERS_KEY,JSON.stringify(raw));
   }catch(e){}
 }
+// Root-cause fix (Recreated User Not Appearing): a username's tombstone
+// previously had no way to be cleared short of its 48h auto-expiry — so
+// deliberately creating a new user with a previously-deleted username was
+// silently stripped out of every push by _dsPruneTombstonedUsers (the same
+// protection that correctly stops a stale device from resurrecting an
+// actually-deleted user), since that check has no way to distinguish the
+// two cases from the username alone. Called only from the explicit
+// "create user" flow — see _umCreateLocalAccount — so the original
+// protection is unaffected for every path that doesn't go through it.
+function clearDeletedUserTombstone(username){
+  try{
+    const raw=loadDeletedUsersTombstone();
+    if(username in raw){
+      delete raw[username];
+      localStorage.setItem(DELETED_USERS_KEY,JSON.stringify(raw));
+    }
+  }catch(e){}
+}
 // Root-cause fix (Deleted User Reappearing — cross-session/tab): the tombstone
 // above only ever lived in the deleting device's OWN localStorage, so it could
 // only ever protect that one device. Any other already-open tab/browser that
@@ -9222,7 +9240,7 @@ window._DS={
       // any tombstoned node out of the outgoing payload — see
       // _dsPruneTombstonedNodes() for why this is required in addition to
       // the existing receive-side merge protection.
-      modules:_dsPruneTombstonedNodes(appData.nodes||[]),
+      modules:_dsStripOpenState(_dsPruneTombstonedNodes(appData.nodes||[])),
       deletedNodes:loadDeletedNodesTombstone(),
       features:Object.assign({},...Object.entries(featuresMap).map(([k,v])=>({[k]:v}))),
       users:_dsPruneTombstonedUsers(loadUsers()),
@@ -11214,6 +11232,10 @@ async function _umCreateLocalAccount(users,fullName,username,employeeNo,departme
   // overwritten by this save. The passed-in array was only ever used for
   // the caller's earlier duplicate-username check.
   const freshUsers=loadUsers();
+  // Root-cause fix (Recreated User Not Appearing): clear any leftover
+  // tombstone for this exact username — see clearDeletedUserTombstone()
+  // for why this is required.
+  clearDeletedUserTombstone(username);
   // User Name = Email Address convention: the same value is stored as both username and email
   freshUsers.push({username, email:username, fullName, employeeNo, department, status, hash, role, authMode:'local', permissions:getDefaultPerms(role)});
   saveUsers(freshUsers);
@@ -11814,6 +11836,22 @@ function _dsMergeIncomingNodes(remoteNodes){
       (function index(list){(list||[]).forEach(c=>{remoteById.set(c.id,c);index(c.children);});})([clone]);
     });
   })(local);
+  // Root-cause fix (Multi-User Expand/Collapse Leaking Between Sessions):
+  // "open" is never part of what's sent (see _dsStripOpenState), so the
+  // remote tree built above has none of it. Restore each node's own
+  // existing local "open" value here, by id — otherwise a completely
+  // unrelated realtime update (someone else editing a different Task)
+  // would rebuild this session's tree from the open-less remote snapshot
+  // and silently collapse whatever this user had expanded.
+  const localOpenIds=new Set();
+  (function collectOpen(list){
+    (list||[]).forEach(n=>{if(n.open)localOpenIds.add(n.id);collectOpen(n.children||[]);});
+  })(local);
+  if(localOpenIds.size){
+    (function restoreOpen(list){
+      (list||[]).forEach(n=>{if(localOpenIds.has(n.id))n.open=true;restoreOpen(n.children||[]);});
+    })(remote);
+  }
   return remote;
 }
 // Root-cause fix (Deleted Sub Task Persists in Supabase — Previous Fix Was
@@ -11842,6 +11880,29 @@ function _dsPruneTombstonedNodes(nodes){
     );
   }
   return prune(nodes);
+}
+// Root-cause fix (Multi-User Expand/Collapse Leaking Between Sessions):
+// "open" (whether a Project/Task/Sub Task row is currently expanded) is
+// this session's own local tree UI state, not shared project data — but
+// it was stored as a plain property directly on each node object, so it
+// rode along inside the exact same tree that gets pushed to Supabase and
+// broadcast to every other connected session via realtime. One user
+// expanding a row was, from the data layer's point of view, indistinguishable
+// from any other node edit — it silently expanded the same row on everyone
+// else's screen too. Stripped here, at the single choke point every push
+// (Firebase and Supabase) already goes through, so it's never transmitted.
+// It still persists across THIS browser's own reloads via the separate,
+// genuinely local STORE_KEY write in save() — only the outgoing shared
+// payload is affected. See _dsMergeIncomingNodes for the matching piece:
+// restoring this session's own open rows after receiving an update, so
+// they don't collapse just because unrelated data changed elsewhere.
+function _dsStripOpenState(nodes){
+  return (nodes||[]).map(n=>{
+    const clone=Object.assign({},n);
+    delete clone.open;
+    if(clone.children&&clone.children.length)clone.children=_dsStripOpenState(clone.children);
+    return clone;
+  });
 }
 // Task Fix (Phase Missing Children / No Expand-Collapse): some records were
 // stored with descendants (e.g. a Phase's Jobs) sitting as flat SIBLINGS in

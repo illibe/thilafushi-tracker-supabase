@@ -4504,6 +4504,64 @@ function clearDeletedUserTombstone(username){
       localStorage.setItem(DELETED_USERS_KEY,JSON.stringify(raw));
     }
   }catch(e){}
+  // Root-cause fix (Recreated User Disappearing Again After Sync): clearing
+  // the LOCAL tombstone alone only protects this one device. Supabase's own
+  // deletedUsers row still has the old entry (nothing removes it from
+  // there), and the very next sync — from ANY device, for ANY reason —
+  // re-imports it via mergeIncomingTombstones' "remote is newer" check,
+  // since a deleted local entry leaves nothing to compare against. That
+  // silently un-does the clear moments later, and the next push strips the
+  // recreated user out again. Recording a synced "recreated at" marker
+  // (see mergeIncomingRecreatedMarkers/_serialize) gives every device,
+  // including the one that pushed the original deletion, a timestamp to
+  // compare against — so a tombstone older than this marker is recognized
+  // as stale and never re-applied again, from any direction.
+  recordUserRecreatedMarker(username);
+}
+// Root-cause fix (Recreated User Disappearing Again After Sync): synced
+// alongside deletedUsers (see clearDeletedUserTombstone above) — records
+// when a username was last deliberately (re)created, so a tombstone dated
+// before this marker is recognized as stale everywhere, not just on the
+// device that did the recreating.
+const RECREATED_USERS_KEY='b2_recreated_users_v1';
+function loadRecreatedUsersMarkers(){
+  try{
+    const raw=JSON.parse(localStorage.getItem(RECREATED_USERS_KEY))||{};
+    const cutoff=Date.now()-48*60*60*1000; // same window as the tombstones themselves
+    let changed=false;
+    Object.keys(raw).forEach(u=>{
+      if(new Date(raw[u]).getTime()<cutoff){delete raw[u];changed=true;}
+    });
+    if(changed)localStorage.setItem(RECREATED_USERS_KEY,JSON.stringify(raw));
+    return raw;
+  }catch(e){return{};}
+}
+function recordUserRecreatedMarker(username){
+  try{
+    const raw=loadRecreatedUsersMarkers();
+    raw[username]=new Date().toISOString();
+    localStorage.setItem(RECREATED_USERS_KEY,JSON.stringify(raw));
+  }catch(e){}
+}
+function mergeIncomingRecreatedMarkers(remoteMarkers){
+  if(!remoteMarkers||typeof remoteMarkers!=='object')return;
+  try{
+    const local=loadRecreatedUsersMarkers();
+    let changed=false;
+    Object.keys(remoteMarkers).forEach(u=>{
+      if(!local[u]||new Date(remoteMarkers[u])>new Date(local[u])){
+        local[u]=remoteMarkers[u];
+        changed=true;
+      }
+    });
+    if(changed)localStorage.setItem(RECREATED_USERS_KEY,JSON.stringify(local));
+  }catch(e){}
+}
+// True when username's tombstone (dated tombstoneTs) is stale because the
+// username was deliberately recreated after that deletion.
+function _isUserTombstoneOverridden(username,tombstoneTs){
+  const recreatedTs=loadRecreatedUsersMarkers()[username];
+  return!!(recreatedTs&&tombstoneTs&&new Date(recreatedTs)>new Date(tombstoneTs));
 }
 // Root-cause fix (Deleted User Reappearing — cross-session/tab): the tombstone
 // above only ever lived in the deleting device's OWN localStorage, so it could
@@ -4522,6 +4580,12 @@ function mergeIncomingTombstones(remoteDeleted){
     const local=loadDeletedUsersTombstone();
     let changed=false;
     Object.keys(remoteDeleted).forEach(u=>{
+      // Root-cause fix (Recreated User Disappearing Again After Sync):
+      // don't reimport a tombstone that's older than this username's own
+      // recreated-at marker — otherwise a stale device's old deletedUsers
+      // snapshot keeps winning this "remote is newer" comparison and
+      // silently reintroducing it on every subsequent sync.
+      if(_isUserTombstoneOverridden(u,remoteDeleted[u]))return;
       if(!local[u]||new Date(remoteDeleted[u])>new Date(local[u])){
         local[u]=remoteDeleted[u];
         changed=true;
@@ -4554,7 +4618,16 @@ function _dsMergeIncomingUsers(remoteUsers){
 // to the project tree (_dsPruneTombstonedNodes).
 function _dsPruneTombstonedUsers(users){
   const tombstones=loadDeletedUsersTombstone();
-  return (users||[]).filter(u=>u&&!tombstones[u.username]);
+  return (users||[]).filter(u=>{
+    if(!u)return false;
+    const ts=tombstones[u.username];
+    if(!ts)return true; // never tombstoned, or tombstone already expired
+    // Root-cause fix (Recreated User Disappearing Again After Sync): a
+    // tombstone dated before this username's own recreated-at marker is
+    // stale — this user was deliberately recreated after it, so it must
+    // never be pruned out of a push again.
+    return _isUserTombstoneOverridden(u.username,ts);
+  });
 }
 function saveUsers(u){
   localStorage.setItem(AUTH_KEY,JSON.stringify(u));
@@ -9248,6 +9321,10 @@ window._DS={
       // tombstones themselves, not just the user list — see
       // mergeIncomingTombstones() for why this is required.
       deletedUsers:loadDeletedUsersTombstone(),
+      // Root-cause fix (Recreated User Disappearing Again After Sync): see
+      // mergeIncomingRecreatedMarkers() for why this needs to be synced
+      // alongside deletedUsers, not just cleared locally.
+      recreatedUsers:loadRecreatedUsersMarkers(),
       meetings:loadMeetings(),
       teams:_dsPruneTombstonedTeams(loadTeams()),
       deletedTeams:loadDeletedTeamsTombstone(),
@@ -9778,6 +9855,7 @@ async function _dsFirebaseConnectCore(apiKey,projectId,databaseURL,opts){
         }
         if(val.users){
           mergeIncomingTombstones(val.deletedUsers);
+          mergeIncomingRecreatedMarkers(val.recreatedUsers);
           saveUsers(_dsMergeIncomingUsers(val.users));
           changed=true;
         }
@@ -9864,7 +9942,7 @@ async function _dsFirebaseConnectCore(apiKey,projectId,databaseURL,opts){
           data=Object.assign({},data,{nodes:_dsMergeIncomingNodes(_fbExistingVal.modules)});
           localStorage.setItem(STORE_KEY,JSON.stringify(data));
         }
-        if(_fbExistingVal.users){mergeIncomingTombstones(_fbExistingVal.deletedUsers);saveUsers(_dsMergeIncomingUsers(_fbExistingVal.users));}
+        if(_fbExistingVal.users){mergeIncomingTombstones(_fbExistingVal.deletedUsers);mergeIncomingRecreatedMarkers(_fbExistingVal.recreatedUsers);saveUsers(_dsMergeIncomingUsers(_fbExistingVal.users));}
         if(_fbExistingVal.meetings)saveMeetings(Array.isArray(_fbExistingVal.meetings)?_fbExistingVal.meetings:Object.values(_fbExistingVal.meetings));
         if(_fbExistingVal.teams){mergeIncomingTeamTombstones(_fbExistingVal.deletedTeams);localStorage.setItem(TEAMS_KEY,JSON.stringify(_dsMergeIncomingTeams(_fbExistingVal.teams)));initTmId();}
         if(_fbExistingVal.milestones)localStorage.setItem(MILESTONES_KEY,JSON.stringify(Array.isArray(_fbExistingVal.milestones)?_fbExistingVal.milestones:Object.values(_fbExistingVal.milestones)));
@@ -10088,7 +10166,7 @@ async function _dsSupabaseConnectCore(url,anonKey,opts){
               localStorage.setItem(STORE_KEY,JSON.stringify(data));
               changed=true;
             }
-            if(val.users){mergeIncomingTombstones(val.deletedUsers);saveUsers(_dsMergeIncomingUsers(val.users));changed=true;}
+            if(val.users){mergeIncomingTombstones(val.deletedUsers);mergeIncomingRecreatedMarkers(val.recreatedUsers);saveUsers(_dsMergeIncomingUsers(val.users));changed=true;}
             if(val.meetings){saveMeetings(Array.isArray(val.meetings)?val.meetings:Object.values(val.meetings));changed=true;}
             if(val.teams){mergeIncomingTeamTombstones(val.deletedTeams);localStorage.setItem(TEAMS_KEY,JSON.stringify(_dsMergeIncomingTeams(val.teams)));initTmId();changed=true;}
             if(val.milestones){localStorage.setItem(MILESTONES_KEY,JSON.stringify(Array.isArray(val.milestones)?val.milestones:Object.values(val.milestones)));changed=true;}
@@ -10141,7 +10219,7 @@ async function _dsSupabaseConnectCore(url,anonKey,opts){
       // session first connects, not only on the next live update.
       initIdCounter(data.nodes);
       const _sbDeduped=_dedupeNodeIds(data.nodes);
-      if(existingPayload.users){mergeIncomingTombstones(existingPayload.deletedUsers);saveUsers(_dsMergeIncomingUsers(existingPayload.users));}
+      if(existingPayload.users){mergeIncomingTombstones(existingPayload.deletedUsers);mergeIncomingRecreatedMarkers(existingPayload.recreatedUsers);saveUsers(_dsMergeIncomingUsers(existingPayload.users));}
       if(existingPayload.meetings)saveMeetings(Array.isArray(existingPayload.meetings)?existingPayload.meetings:Object.values(existingPayload.meetings));
       if(existingPayload.teams){mergeIncomingTeamTombstones(existingPayload.deletedTeams);localStorage.setItem(TEAMS_KEY,JSON.stringify(_dsMergeIncomingTeams(existingPayload.teams)));}
       if(existingPayload.milestones)localStorage.setItem(MILESTONES_KEY,JSON.stringify(Array.isArray(existingPayload.milestones)?existingPayload.milestones:Object.values(existingPayload.milestones)));

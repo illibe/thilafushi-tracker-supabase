@@ -15354,13 +15354,11 @@ function deleteFeat(id){
     toast('Cannot delete: feature is assigned to a sprint. Remove it from the sprint first.','error');
     return;
   }
-  // Also block if master record has a non-pending/backlog status
-  const _delMaster=loadMasterFeats().find(m=>m.id===id);
-  const _delStatus=_delMaster?(_delMaster.status||'backlog'):'backlog';
-  if(_delStatus!=='backlog'&&_delStatus!=='pending'){
-    toast('Cannot delete: feature status is not Pending. Only pending features can be deleted.','error');
-    return;
-  }
+  // Task Fix (Activity Delete — Status Restriction Removed): deletion is no
+  // longer gated on Activity status (To Do / In Progress / Pending Review /
+  // Completed) — only on the permission check above and the sprint-
+  // assignment guard, per requirement: "Do not restrict deletion based on
+  // Activity status."
   removeScoresForFeature(selectedId,id);
   featuresMap[selectedId]=(featuresMap[selectedId]||[]).filter(x=>x.id!==id);
   // Root-cause fix (Activity Deletion Not Sticking): record a tombstone

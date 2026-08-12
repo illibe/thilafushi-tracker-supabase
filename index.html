@@ -15155,11 +15155,17 @@ function renderFeatures(){
   if(!feats.length){tbody.innerHTML='<tr><td colspan="4" class="feat-empty">No features yet.</td></tr>';return;}
   tbody.innerHTML='';
   // Task Fix (Activity Delete Permission): the ✕ delete button is only
-  // rendered when the current user actually has canDeleteFeature() — it
-  // used to render unconditionally for everyone and rely solely on the
-  // in-function guard inside deleteFeat() (which still stays in place
-  // below as defense-in-depth). Users without the permission now simply
-  // don't see a delete option at all, instead of seeing one that errors.
+  // rendered when the current user can actually delete this Activity —
+  // either via the role-level "Delete Activities" grant (canDeleteFeature),
+  // or via Delete permission on the Activity's parent Project/Task/Sub Task
+  // (canEditThisProjectScope — the same hierarchical Special Permissions
+  // check used to gate deleting that Task/Sub Task node itself). Computed
+  // once here since it's the same for every row (all Activities on this
+  // page belong to the one currently-selected node). The in-function guard
+  // inside deleteFeat() stays in place below as defense-in-depth. Users
+  // without permission now simply don't see a delete option at all,
+  // instead of seeing one that errors.
+  const _canDeleteThisActivity=canDeleteFeature()||canEditThisProjectScope(selectedId,'delete');
   feats.forEach(f=>{
     const tr=document.createElement('tr');
     const curStatus=f.activityStatus||(f.done?'completed':'todo');
@@ -15173,7 +15179,7 @@ function renderFeatures(){
       </td>
       <td class="feat-status">${statusSelect}</td>
       <td style="text-align:center"><button class="icon-btn" onclick="openFeatModal(${f.id})">✎</button></td>
-      <td style="text-align:center">${canDeleteFeature()?`<button class="icon-btn" style="color:var(--red)" onclick="deleteFeat(${f.id})">✕</button>`:''}</td>`;
+      <td style="text-align:center">${_canDeleteThisActivity?`<button class="icon-btn" style="color:var(--red)" onclick="deleteFeat(${f.id})">✕</button>`:''}</td>`;
     tbody.appendChild(tr);
   });
 }
@@ -15331,8 +15337,17 @@ function confirmCompletionDate(){
 
 function deleteFeat(id){
   if(!canEdit())return;
-  if(!canDeleteFeature()){toast('You do not have permission to delete features','error');return;}
   if(!selectedId)return;
+  // Task Fix (Activity Delete — Parent Hierarchy Permission): an Activity
+  // can be deleted either via the existing role-level "Delete Activities"
+  // grant (canDeleteFeature), or via Delete permission on the Activity's
+  // parent Project/Task/Sub Task — the same hierarchical Special
+  // Permissions check (canEditThisProjectScope) already used to gate
+  // deleting that Task/Sub Task node itself (see askDelete()).
+  if(!canDeleteFeature()&&!canEditThisProjectScope(selectedId,'delete')){
+    toast('You do not have permission to delete this Activity','error');
+    return;
+  }
   // Change 1: block deletion if feature has been assigned to any sprint
   const _delBridge=loadMtgFeats().filter(r=>r.featureId===id);
   if(_delBridge.length){

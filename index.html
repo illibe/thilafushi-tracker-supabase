@@ -13439,7 +13439,18 @@ function renderNode(node){
   const hasNosQty=lvl===1&&node.nosQty!==undefined&&node.nosQty!==null&&node.nosQty!=='';
   // Task 1 (Qty Caption): "Nos/Qty" renamed to the friendlier "Qty" caption;
   // the value itself stays highlighted in yellow as before.
-  lbl.innerHTML=hasNosQty?`${eH(node.name)} <span style="color:#facc15;font-weight:600">(Qty: ${eH(String(node.nosQty))})</span>`:eH(node.name);
+  // Task Fix (Task Ribbon — Qty Display): Qty/Nos is only ever stored on
+  // the Project (level 1) node itself — Task (level 2) rows have no
+  // nosQty field of their own, and this stays true here (no new field,
+  // no data structure change). For a Task row, look up its own Project
+  // ancestor's existing Qty value via depFindProjectAncestor() and show
+  // it next to the Task's heading the same way it's already shown next
+  // to the Project's — existing Task Ribbon layout/design otherwise
+  // untouched.
+  const taskQty=lvl===2?(depFindProjectAncestor(node.id)||{}).nosQty:undefined;
+  const hasTaskQty=lvl===2&&taskQty!==undefined&&taskQty!==null&&taskQty!=='';
+  const qtySpan=(val)=>` <span style="color:#facc15;font-weight:600">(Qty: ${eH(String(val))})</span>`;
+  lbl.innerHTML=eH(node.name)+(hasNosQty?qtySpan(node.nosQty):hasTaskQty?qtySpan(taskQty):'');
   row.appendChild(lbl);
   // Date display for Program (level 0) — unchanged from before.
   if(lvl===0&&(node.startDate||node.endDate)){

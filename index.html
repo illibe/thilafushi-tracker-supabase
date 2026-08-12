@@ -13436,21 +13436,15 @@ function renderNode(node){
   if(lvl>0){const ind=document.createElement('div');ind.style.width=(lvl*6)+'px';ind.className='node-indent';row.appendChild(ind);}
   if(isTask){const chk=document.createElement('div');chk.className=`task-check ${prog===100?'done':''}`;chk.title='Toggle done';chk.onclick=(e)=>{e.stopPropagation();toggleDone(node);};row.appendChild(chk);}
   const lbl=document.createElement('div');lbl.className='node-label';
-  const hasNosQty=lvl===1&&node.nosQty!==undefined&&node.nosQty!==null&&node.nosQty!=='';
   // Task 1 (Qty Caption): "Nos/Qty" renamed to the friendlier "Qty" caption;
   // the value itself stays highlighted in yellow as before.
-  // Task Fix (Task Ribbon — Qty Display): Qty/Nos is only ever stored on
-  // the Project (level 1) node itself — Task (level 2) rows have no
-  // nosQty field of their own, and this stays true here (no new field,
-  // no data structure change). For a Task row, look up its own Project
-  // ancestor's existing Qty value via depFindProjectAncestor() and show
-  // it next to the Task's heading the same way it's already shown next
-  // to the Project's — existing Task Ribbon layout/design otherwise
-  // untouched.
-  const taskQty=lvl===2?(depFindProjectAncestor(node.id)||{}).nosQty:undefined;
-  const hasTaskQty=lvl===2&&taskQty!==undefined&&taskQty!==null&&taskQty!=='';
-  const qtySpan=(val)=>` <span style="color:#facc15;font-weight:600">(Qty: ${eH(String(val))})</span>`;
-  lbl.innerHTML=eH(node.name)+(hasNosQty?qtySpan(node.nosQty):hasTaskQty?qtySpan(taskQty):'');
+  // Task Fix (Task Ribbon — Qty Display): mirrors whatever Qty/Nos value is
+  // already saved on the node next to its own heading — no level
+  // restriction, no new field, no data structure change. The Edit modal
+  // is the only place that ever writes this value, so this simply reflects
+  // it back wherever it's actually present.
+  const hasNosQty=node.nosQty!==undefined&&node.nosQty!==null&&node.nosQty!=='';
+  lbl.innerHTML=eH(node.name)+(hasNosQty?` <span style="color:#facc15;font-weight:600">(Qty: ${eH(String(node.nosQty))})</span>`:'');
   row.appendChild(lbl);
   // Date display for Program (level 0) — unchanged from before.
   if(lvl===0&&(node.startDate||node.endDate)){
@@ -13537,7 +13531,9 @@ function renderFlat(nodes,root,depth){
     const prog=calcProgress(n);
     const row=document.createElement('div');
     row.style.cssText=`display:flex;align-items:center;gap:10px;padding:8px 12px;margin-left:${depth*20}px;background:var(--surface2);border-radius:7px;margin-bottom:4px;cursor:pointer;border:1px solid var(--border);`;
-    const hasNosQty=(n.level||0)===1&&n.nosQty!==undefined&&n.nosQty!==null&&n.nosQty!=='';
+    // Task Fix (Task Ribbon — Qty Display): mirrors renderNode()'s same
+    // level-agnostic Qty read — see that function for the reasoning.
+    const hasNosQty=n.nosQty!==undefined&&n.nosQty!==null&&n.nosQty!=='';
     const nameLabel=hasNosQty?`${eH(n.name)} <span style="color:#facc15;font-weight:600">(Qty: ${eH(String(n.nosQty))})</span>`:eH(n.name);
     row.innerHTML=`<div class="dot" style="background:${progressColor(prog)}"></div><span style="flex:1;font-size:13px">${nameLabel}</span><div class="node-progress-bar" style="width:70px"><div class="node-progress-fill" style="width:${prog}%;background:${progressColor(prog)}"></div></div><span style="font-family:var(--font-head);font-size:13px;font-weight:700;color:${progressColor(prog)};width:36px;text-align:right">${prog}%</span>`;
     row.onclick=()=>selectNode(n.id);root.appendChild(row);

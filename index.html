@@ -792,7 +792,7 @@ body.readonly .icon-btn.tl-expand-details-btn{pointer-events:auto;opacity:1;}
     <div class="ls-welcome">Welcome Back</div>
     <div class="ls-welcome-sub">Sign in to your Thilafushi Tracker account to continue.</div>
 
-    <!-- Task 2: label is "Email Address" — Firebase Auth (when enabled) and the local
+    <!-- label is "Email Address" — Supabase Authentication and the local
          fallback both authenticate using this value as an email/username. -->
     <div class="login-field">
       <label>Email Address</label>
@@ -827,9 +827,9 @@ body.readonly .icon-btn.tl-expand-details-btn{pointer-events:auto;opacity:1;}
     <!-- Login button — onclick preserved -->
     <button class="login-btn" id="login-submit-btn" onclick="doLogin()">Sign In</button>
 
-    <!-- Forgot Password Panel — redesigned to use Firebase Authentication's
-         native password reset flow (sendPasswordResetEmail). Username field
-         removed entirely per requirement — email is the only input needed. -->
+    <!-- Forgot Password Panel — email is the only input needed; self-service
+         reset is currently unavailable (see submitForgotPw), so this always
+         directs the person to contact their administrator. -->
     <div class="forgot-panel" id="forgot-panel">
       <p style="font-size:12px;color:var(--muted);margin:0" id="fp-instructions">Enter your registered email address. We'll send you a secure password reset link.</p>
       <div class="login-field" style="margin-bottom:0"><label>Registered Email Address</label><input type="email" id="fp-email" placeholder="your@email.com" oninput="fpValidateEmail()" onkeydown="if(event.key==='Enter'&&!document.getElementById('fp-send-btn').disabled)submitForgotPw()"></div>
@@ -2409,64 +2409,7 @@ body.readonly .icon-btn.tl-expand-details-btn{pointer-events:auto;opacity:1;}
         </div>
       </div>
 
-      <!-- Row 4: Firebase -->
-      <div id="ds-row-firebase" class="ds-row" style="display:grid;grid-template-columns:130px 130px 1fr">
-        <div class="ds-type-cell">
-          <span style="font-size:14px">🔥</span>
-          <span style="font-size:13px;font-weight:600">Real-Time</span>
-        </div>
-        <div class="ds-mode-cell">Firebase</div>
-        <div class="ds-config-cell">
-          <!-- Root-cause fix (Firebase Retired — Split-Brain Data Loss): Firebase
-               is no longer a supported backend (see _dsAutoReconnect,
-               dsFirebaseConnect, fbAuthIsEnabled). Inputs/button disabled below
-               so this card can no longer be used to connect — kept visible only
-               so anyone who previously connected can see it's retired, not gone. -->
-          <div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);border-radius:7px;padding:9px 12px;margin-bottom:12px;font-size:12px;color:var(--red);line-height:1.5">
-            <strong>✕ Firebase has been retired.</strong> Supabase is now the only supported backend — this card is disabled and kept only for reference.
-          </div>
-          <p style="font-size:12px;color:var(--muted);margin-bottom:8px">Connect to Firebase Realtime Database for live sync across devices.</p>
-          <!-- Field guidance -->
-          <div style="background:rgba(0,198,255,.06);border:1px solid rgba(0,198,255,.2);border-radius:7px;padding:9px 12px;margin-bottom:12px;font-size:11px;color:var(--muted);line-height:1.6">
-            <strong style="color:var(--accent)">📍 Where to find these values:</strong> Firebase Console → Project → ⚙ Project Settings → General → Your apps → Web config.<br>
-            <strong style="color:var(--accent)">🔗 Database URL:</strong> Firebase Console → Realtime Database → Data tab → URL shown at top.<br>
-            <span style="color:var(--red)">✕ Do NOT use <code>console.firebase.google.com</code> — use <code>https://YOUR-PROJECT-default-rtdb.firebaseio.com</code></span>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-            <div>
-              <label style="font-size:11px;color:var(--muted);font-weight:600;display:block;margin-bottom:3px">API Key</label>
-              <input type="text" id="ds-fb-apikey" placeholder="AIza…" disabled style="width:100%;padding:7px 10px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);opacity:.5;cursor:not-allowed">
-            </div>
-            <div>
-              <label style="font-size:11px;color:var(--muted);font-weight:600;display:block;margin-bottom:3px">Project ID</label>
-              <input type="text" id="ds-fb-projectid" placeholder="my-project-id" disabled style="width:100%;padding:7px 10px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);opacity:.5;cursor:not-allowed">
-            </div>
-          </div>
-          <div style="margin-bottom:10px">
-            <label style="font-size:11px;color:var(--muted);font-weight:600;display:block;margin-bottom:3px">Database URL</label>
-            <input type="url" id="ds-fb-dburl" placeholder="https://my-project-default-rtdb.firebaseio.com" disabled style="width:100%;padding:7px 10px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);opacity:.5;cursor:not-allowed">
-          </div>
-          <div style="display:flex;gap:8px;align-items:center">
-            <button class="btn btn-primary btn-sm" onclick="dsFirebaseConnect()" disabled style="opacity:.5;cursor:not-allowed">🔥 Connect (disabled)</button>
-            <button class="btn btn-ghost btn-sm" id="ds-fb-disconnect-btn" onclick="dsFirebaseDisconnect()" style="display:none">Disconnect</button>
-          </div>
-          <div id="ds-firebase-msg" style="margin-top:8px;font-size:12px;color:var(--muted)"></div>
-
-          <!-- Firebase Authentication (Email/Password) -->
-          <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
-            <label style="display:flex;align-items:flex-start;gap:10px;cursor:not-allowed;opacity:.5">
-              <input type="checkbox" id="ds-fb-auth-enabled" onchange="dsToggleFirebaseAuth()" disabled style="margin-top:2px;width:16px;height:16px;accent-color:var(--accent)">
-              <span>
-                <strong style="font-size:13px">🔐 Use Firebase Authentication for login</strong><br>
-                <span style="font-size:11px;color:var(--muted)">Requires a connected Firebase project (above). When enabled, sign-in uses Firebase Email/Password Authentication instead of the local username/password check. User profiles (Full Name, Email, Role, Department, Status) are read from Realtime Database at <code>users/&lt;uid&gt;</code>; passwords are never stored in the database.</span>
-              </span>
-            </label>
-            <div id="ds-fb-auth-msg" style="margin-top:8px;font-size:12px;color:var(--muted)"></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Row 5: Supabase -->
+      <!-- Row 4: Supabase -->
       <div id="ds-row-supabase" class="ds-row" style="display:grid;grid-template-columns:130px 130px 1fr;border-top:1px solid var(--border)">
         <div class="ds-type-cell">
           <span style="font-size:14px">⚡</span>
@@ -2516,7 +2459,7 @@ create policy "public read/write (testing)" on b2_tracker_data
     <div style="margin-top:18px;padding:12px 16px;background:var(--surface2);border-radius:8px;border:1px solid var(--border)">
       <p style="font-size:12px;color:var(--muted2)">
         <strong style="color:var(--muted)">Note:</strong>
-        localStorage is always used as a live working copy. External sources (File, Sheet, Firebase) sync on top.
+        localStorage is always used as a live working copy. External sources (File, Sheet, Supabase) sync on top.
         Data Structure: <code style="background:var(--surface);padding:1px 5px;border-radius:4px;font-size:11px">{ modules[], features[], users[], meetings[] }</code>
       </p>
     </div>
@@ -3506,7 +3449,7 @@ const MOM_KEY         = 'b2_meeting_minutes_v1'; // NEW: Meeting Minutes (Task 2
 const BACKLOG_KEY     = 'b2_backlog_v1';           // legacy, kept for read compat
 const FEATURES_KEY    = 'b2_features_master_v1';   // NEW: master feature table
 const MTG_FEAT_KEY    = 'b2_meeting_features_v1';  // NEW: bridge table
-const SUPERADMIN      = 'ilyas@port.mv'; // User Name = Email Address convention (Firebase Auth readiness)
+const SUPERADMIN      = 'ilyas@port.mv'; // User Name = Email Address convention (Supabase Auth)
 
 // ══════════════════════════════════════════════════════
 // MASTER FEATURES TABLE
@@ -3514,7 +3457,7 @@ const SUPERADMIN      = 'ilyas@port.mv'; // User Name = Email Address convention
 function loadMasterFeats(){try{return (JSON.parse(localStorage.getItem(FEATURES_KEY))||[]).filter(Boolean);}catch(e){return[];}}
 function saveMasterFeats(f){
   localStorage.setItem(FEATURES_KEY,JSON.stringify(f));
-  // Root-cause fix: same missing Firebase push as saveMomList — see there for the full explanation.
+  // Root-cause fix: same missing push as saveMomList — see there for the full explanation.
   if(window._DS&&window._DS.type!=='local'&&!window._DS._applyingRemote)window._DS._onSave(data);
 }
 let mfIdC=6000;
@@ -3600,7 +3543,7 @@ function masterToLegacyFeat(mf){
 function loadMtgFeats(){try{return (JSON.parse(localStorage.getItem(MTG_FEAT_KEY))||[]).filter(Boolean);}catch(e){return[];}}
 function saveMtgFeats(mf){
   localStorage.setItem(MTG_FEAT_KEY,JSON.stringify(mf));
-  // Root-cause fix: same missing Firebase push as saveMomList — see there for the full explanation.
+  // Root-cause fix: same missing push as saveMomList — see there for the full explanation.
   if(window._DS&&window._DS.type!=='local'&&!window._DS._applyingRemote)window._DS._onSave(data);
 }
 let mfeIdC=7000;
@@ -4196,14 +4139,6 @@ function savePermissions(){
     });
   }
   saveUsers(users);
-  // Task Fix (Permissions Sync): a Firebase-authenticated user's permissions must
-  // also be written to their Realtime Database profile (users/<uid>/permissions),
-  // not just the local browser copy — otherwise changes made here never reach
-  // that user's own device, since it has no local record of them at all.
-  if(user.authMode==='firebase'&&user.uid&&fbAuthIsEnabled()){
-    fbEnsureAuthApp().then(fb=>fb.database().ref('users/'+user.uid+'/permissions').set(user.permissions))
-      .catch(e=>console.warn('Firebase permissions sync error:',e));
-  }
   document.getElementById('perm-modal').classList.remove('open');
   _permTarget=null;
   renderUserTable();
@@ -4267,19 +4202,6 @@ function fpSetLoading(isLoading){
   document.getElementById('fp-cancel-btn').disabled=isLoading;
   document.getElementById('fp-send-btn').disabled=isLoading||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(document.getElementById('fp-email').value.trim());
 }
-// Task (User-Friendly Messages): maps Firebase Auth error codes to the exact
-// wording requested, never exposing raw Firebase error text/codes.
-function fpFriendlyError(err){
-  const code=(err&&err.code)||'';
-  const map={
-    'auth/invalid-email':'Please enter a valid email address.',
-    'auth/missing-email':'Please enter a valid email address.',
-    'auth/user-not-found':'No account was found with this email address.',
-    'auth/network-request-failed':'Unable to send the reset email. Please check your internet connection and try again.',
-    'auth/too-many-requests':'Too many attempts. Please wait a moment and try again.'
-  };
-  return map[code]||'Unable to send the reset email. Please check your internet connection and try again.';
-}
 let _fpAutoCloseTimer=null;
 async function submitForgotPw(){
   const email=document.getElementById('fp-email').value.trim();
@@ -4289,38 +4211,11 @@ async function submitForgotPw(){
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
     errEl.textContent='Please enter a valid email address.';errEl.style.display='';return;
   }
-  // Task (Technical Requirements): uses Firebase Authentication's native
-  // sendPasswordResetEmail exclusively — no custom reset tokens, temporary
-  // passwords, or third-party email delivery. Reuses the app's existing
-  // optional Firebase Auth integration (the same one used for Firebase-mode
-  // sign-in) rather than introducing a second, separate Firebase setup.
-  if(!fbAuthIsEnabled()){
-    errEl.textContent='Password reset via email is not available on this system. Please contact your administrator.';
-    errEl.style.display='';
-    return;
-  }
-  fpSetLoading(true);
-  try{
-    const fb=await fbEnsureAuthApp();
-    await fb.auth().sendPasswordResetEmail(email);
-    okEl.textContent="Password reset link has been sent to your registered email address. Please check your inbox and spam folder.";
-    okEl.style.display='';
-    document.getElementById('fp-email').value='';
-    document.getElementById('fp-instructions').style.display='none';
-    document.getElementById('fp-actions').style.display='none';
-    document.getElementById('fp-back-row').style.display='block';
-    // Task (After a Successful Request): auto-close after ~3s, but a person
-    // can still click "Back to Login" immediately instead of waiting.
-    _fpAutoCloseTimer=setTimeout(()=>{
-      const p=document.getElementById('forgot-panel');
-      if(p.classList.contains('active'))toggleForgotPanel();
-    },3000);
-  }catch(err){
-    errEl.textContent=fpFriendlyError(err);
-    errEl.style.display='';
-  }finally{
-    fpSetLoading(false);
-  }
+  // Self-service password reset via email requires an authentication
+  // provider that can send reset links; this deployment has none
+  // configured, so admins reset passwords directly (see triggerAdminReset).
+  errEl.textContent='Password reset via email is not available on this system. Please contact your administrator.';
+  errEl.style.display='';
 }
 
 // ── Admin-side password reset (from Users page) ───────
@@ -4466,13 +4361,13 @@ async function tryEmailJS(toEmail,toName,resetUrl){
 // AUTH
 // ══════════════════════════════════════════════════════
 function loadUsers(){try{return (JSON.parse(localStorage.getItem(AUTH_KEY))||[]).filter(Boolean);}catch(e){return[];}}
-// Task Fix (Issue 2 — User Sync with Firebase): applying a Firebase "users"
-// snapshot previously called saveUsers() directly on the remote array,
+// Task Fix (User Sync — Merge Race): applying a remote "users" snapshot
+// previously called saveUsers() directly on the remote array,
 // unconditionally REPLACING local state. If a user was just created on this
 // device and the remote snapshot hasn't caught up to include it yet (e.g. a
 // reconnect's one-time read racing the just-completed local save), that
 // newly created user would be wiped out the moment the snapshot was
-// applied — even though it was correctly written to Firebase moments
+// applied — even though it was correctly written to the remote database moments
 // earlier. Deletions must only ever happen via explicit user action
 // (see umDeleteUser) — never as a side-effect of a sync merge — so any
 // locally-known user missing from the incoming remote array is preserved
@@ -4654,7 +4549,7 @@ function saveUsers(u){
   localStorage.setItem(AUTH_KEY,JSON.stringify(u));
   // Task Fix (Supabase Migration): every core data domain pushes through the same sync
   // pipeline as the tracker. Skip the push when this save is just applying data that
-  // arrived FROM Firebase/Supabase (window._DS._applyingRemote) — otherwise the
+  // arrived FROM Supabase (window._DS._applyingRemote) — otherwise the
   // real-time listener's own echo re-triggers another push, which re-triggers the
   // listener again, and a stale in-flight write can race and overwrite newer local
   // data (e.g. a just-created user disappearing from the list).
@@ -4761,128 +4656,6 @@ function populateLoginDropdown(){
 }
 
 let _loginAttempts=0; // tracks failed attempts per session
-// ══════════════════════════════════════════════════════
-// FIREBASE AUTHENTICATION (Email/Password) — optional layer.
-// OFF by default. Activates only when a Firebase project is connected
-// (Settings → Real-Time) AND "Use Firebase Authentication for login" is
-// enabled there. When OFF, the existing local username/password check
-// (unchanged below) continues to work exactly as before — so the app is
-// never left in a state where no one can sign in.
-// ══════════════════════════════════════════════════════
-function fbGetSavedConfig(){
-  let saved={};
-  try{saved=JSON.parse(localStorage.getItem(DS_CFG_KEY)||'{}');}catch(e){saved={};}
-  // Task Fix (Login Authentication): this browser has never connected to
-  // Firebase itself (no apiKey saved locally) — most commonly a brand-new
-  // user's first-ever visit to the deployed app. Use the baked-in default
-  // connection (see DEFAULT_FB_CONFIG above) so Firebase Authentication is
-  // available immediately, instead of silently falling back to an empty
-  // local user list. Any browser that HAS connected Firebase itself (e.g.
-  // the admin's own browser via Settings → Connect) keeps using its own
-  // saved config exactly as before — this fallback never overrides it.
-  if(!saved.fb||!saved.fb.apiKey){
-    return DEFAULT_FB_CONFIG;
-  }
-  return saved;
-}
-function fbAuthIsEnabled(){
-  // Root-cause fix (Firebase Retired — Split-Brain Data Loss): Firebase is
-  // no longer a supported backend (see _dsAutoReconnect and dsFirebaseConnect
-  // below). Forcing this to always return false means login can never route
-  // through Firebase Authentication, even on a device with an old
-  // authEnabled:true saved from before the migration.
-  return false;
-}
-let _fbAuthStateUnsub=null;
-async function fbEnsureAuthApp(){
-  const cfg=fbGetSavedConfig();
-  if(!cfg.fb||!cfg.fb.apiKey)throw new Error('Firebase is not configured. Set it up in Settings first.');
-  if(!window.firebase||!window.firebase.auth){
-    await _dsLoadScript('https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js');
-    await _dsLoadScript('https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js');
-    await _dsLoadScript('https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js');
-  }
-  const fbCfg={
-    apiKey:cfg.fb.apiKey,
-    authDomain:cfg.fb.projectId+'.firebaseapp.com',
-    databaseURL:cfg.fb.databaseURL.endsWith('/')?cfg.fb.databaseURL.slice(0,-1):cfg.fb.databaseURL,
-    projectId:cfg.fb.projectId
-  };
-  if(!window.firebase.apps||!window.firebase.apps.length){
-    window.firebase.initializeApp(fbCfg);
-  }
-  if(!_fbAuthStateUnsub){
-    // Task 4: onAuthStateChanged — detects sign-out/session expiry from Firebase itself
-    _fbAuthStateUnsub=window.firebase.auth().onAuthStateChanged(fbUser=>{
-      const sess=getSession();
-      if(!fbUser&&sess&&sess.authMode==='firebase'){
-        clearSession();
-        doLogout();
-      }
-    });
-  }
-  return window.firebase;
-}
-// Task 1: user-friendly Firebase error mapping — no technical details exposed
-function fbFriendlyError(err){
-  const code=(err&&err.code)||'';
-  const map={
-    'auth/invalid-email':'Invalid email or password.',
-    'auth/user-disabled':'This account has been disabled. Contact your administrator.',
-    'auth/user-not-found':'User account not found.',
-    'auth/wrong-password':'Invalid email or password.',
-    'auth/invalid-credential':'Invalid email or password.',
-    'auth/too-many-requests':'Too many login attempts. Please try again later.',
-    'auth/network-request-failed':'Network connection error. Please check your internet connection.',
-    // Task Fix (User Creation — API Key error): these codes previously fell through
-    // to a raw, technical Firebase/Google error message being shown directly to the
-    // user (e.g. the full "API key not valid" JSON response). All authentication
-    // failure paths must now resolve to a friendly message here.
-    'auth/invalid-api-key':'Unable to reach the authentication service. Please contact your administrator.',
-    'auth/api-key-not-valid':'Unable to reach the authentication service. Please contact your administrator.',
-    'auth/app-not-authorized':'Unable to reach the authentication service. Please contact your administrator.',
-    'auth/email-already-in-use':'That email address is already registered.',
-    'auth/weak-password':'Password must be at least 6 characters.',
-    'auth/operation-not-allowed':'Account creation is currently unavailable. Please contact your administrator.'
-  };
-  return map[code]||'Something went wrong. Please try again or contact your administrator.';
-}
-async function firebaseSignIn(email,password){
-  const fb=await fbEnsureAuthApp();
-  const cred=await fb.auth().signInWithEmailAndPassword(email,password);
-  const uid=cred.user.uid;
-  // Task 3: profile (Full Name, Role, Department, Status) lives only in Realtime Database — no password stored there
-  const snap=await fb.database().ref('users/'+uid).once('value');
-  const profile=snap.val()||{};
-  if(profile.status&&profile.status.toLowerCase()==='disabled'){
-    await fb.auth().signOut();
-    const e=new Error('disabled');e.code='auth/user-disabled';throw e;
-  }
-  return{
-    uid,
-    username:profile.email||email,
-    email:profile.email||email,
-    fullName:profile.fullName||'',
-    department:profile.department||'',
-    status:profile.status||'Active',
-    role:profile.role||'user',
-    permissions:profile.permissions||null
-  };
-}
-async function firebaseSignOut(){
-  try{if(window.firebase&&window.firebase.auth)await window.firebase.auth().signOut();}catch(e){}
-}
-function dsToggleFirebaseAuth(){
-  // Root-cause fix (Firebase Retired — Split-Brain Data Loss): see
-  // _dsAutoReconnect(). Firebase Authentication can no longer be enabled
-  // from here — fbAuthIsEnabled() would ignore it anyway, but blocking it
-  // here too avoids the checkbox showing a misleading "enabled" state.
-  const chk=document.getElementById('ds-fb-auth-enabled');
-  const msgEl=document.getElementById('ds-fb-auth-msg');
-  chk.checked=false;
-  if(msgEl)msgEl.innerHTML='<span style="color:var(--red)">✕ Firebase has been retired. Supabase is now the only supported backend.</span>';
-}
-
 async function doLogin(){
   const username=document.getElementById('login-user').value.trim();
   const password=document.getElementById('login-pass').value;
@@ -4898,45 +4671,6 @@ async function doLogin(){
   if(!password){
     errEl.textContent='Please enter your password.';
     errEl.style.display='';return;
-  }
-
-  // Task Fix (Superadmin Lockout): Firebase Authentication being enabled must
-  // never lock out an account that actually exists locally on this device
-  // (this includes the superadmin, who is local-only by design and can never
-  // be created in Firebase). Before routing to Firebase, check whether a
-  // local account with this username has a stored password hash — if so,
-  // authenticate locally regardless of the Firebase Auth toggle. Usernames
-  // with no local hash (true Firebase-only accounts, e.g. a new user signing
-  // in on their own device for the first time) still go through Firebase Auth
-  // exactly as before.
-  const _localCandidate=loadUsers().find(u=>u.username.toLowerCase()===username.toLowerCase()&&u.hash);
-
-  // Task 1: Firebase Authentication path (only when explicitly enabled in Settings,
-  // and only for usernames that don't already exist as a local account on this device)
-  if(fbAuthIsEnabled()&&!_localCandidate){
-    if(submitBtn){submitBtn.disabled=true;submitBtn.textContent='Signing in…';}
-    try{
-      const profile=await firebaseSignIn(username,password);
-      _loginAttempts=0;
-      logSystemEvent('login',profile.username,'','Success');
-      setSession({username:profile.username,role:profile.role,authMode:'firebase',uid:profile.uid,fullName:profile.fullName,department:profile.department,permissions:profile.permissions});
-      document.getElementById('login-pass').value='';
-      document.getElementById('login-screen').style.display='none';
-      migrateUserPerms();
-      bootApp();
-    }catch(err){
-      _loginAttempts++;
-      logSystemEvent('login',username,'','Failed');
-      errEl.textContent=fbFriendlyError(err);
-      errEl.style.display='';
-      ['login-user','login-pass'].forEach(id=>{
-        const el=document.getElementById(id);
-        if(el){el.style.borderColor='#c0392b';setTimeout(()=>{el.style.borderColor='';},1800);}
-      });
-    }finally{
-      if(submitBtn){submitBtn.disabled=false;submitBtn.textContent='Sign In';}
-    }
-    return;
   }
 
   // Phase 3 (Supabase Authentication — Login): Supabase is now the primary
@@ -5020,8 +4754,7 @@ async function doLogin(){
     migrateUserPerms();
     bootApp();
   }catch(supabaseErr){
-    // Task Fix (Supabase Lockout Protection — mirrors the existing Firebase
-    // Superadmin Lockout fix above): an account that only exists locally
+    // Task Fix (Supabase Lockout Protection): an account that only exists locally
     // (the superadmin, seeded by ensureSuperAdmin() and never provisioned
     // in Supabase Auth; or any account created before Phase 2) must not be
     // locked out just because Supabase sign-in failed for it. Fall back to
@@ -5138,11 +4871,8 @@ function updateLoginCountdown(){
 }
 
 function doLogout(){
-  // Task 5: sign out of Firebase Auth too, if that's how this session was established
   const sess=getSession();
-  if(sess&&sess.authMode==='firebase'){firebaseSignOut();}
-  // Phase 3: sign out of Supabase Auth too, if that's how this session was
-  // established — same fire-and-forget pattern as the Firebase branch above.
+  // Phase 3: sign out of Supabase Auth too, if that's how this session was established.
   if(sess&&sess.authMode==='supabase'&&window._DS&&window._DS._authClient){
     window._DS._authClient.auth.signOut().catch(()=>{});
   }
@@ -5169,8 +4899,7 @@ function bootApp(){
   // every login.
   tsSuppressProjectAutoOpen=true;
   // Task Fix (Default Database Provider): auto-initialize the active data source
-  // (Firebase by default, or Supabase if explicitly selected) as soon as the app
-  // boots, not only when Settings is opened.
+  // (Supabase) as soon as the app boots, not only when Settings is opened.
   if(!window._dsAutoReconnected){window._dsAutoReconnected=true;_dsAutoReconnect();}
   document.getElementById('login-screen').style.display='none';
   document.getElementById('user-badge').style.display='flex';
@@ -5393,11 +5122,11 @@ function saveTeams(t){
   localStorage.setItem(TEAMS_KEY,JSON.stringify(t));
   if(window._DS&&window._DS.type!=='local'&&!window._DS._applyingRemote)window._DS._onSave(data);
 }
-// Root-cause fix (New Team Members Not Persisting): the incoming Firebase/
+// Root-cause fix (New Team Members Not Persisting): the incoming
 // Supabase snapshot handlers below previously did `localStorage.setItem(
 // TEAMS_KEY, JSON.stringify(remoteTeams))` — an UNCONDITIONAL overwrite of
 // local team data with whatever the remote source happened to hold at that
-// moment. tmCreate()'s push to Supabase/Firebase is fire-and-forget (not
+// moment. tmCreate()'s push to Supabase is fire-and-forget (not
 // awaited), so if this device's own auto-reconnect (which runs on every
 // page load) or another device's realtime update lands in that window, it
 // fetches/receives a STALE snapshot that predates the new member and wipes
@@ -5504,8 +5233,7 @@ function _dsMergeIncomingMasterFeats(remoteFeats){
 // Root-cause fix (Activities/Selection Process Data Loss — Cross-Session
 // Invisibility): featuresMap — the per-node checklist that actually drives
 // the right-panel "Activity" tab list — had NO receive path from Supabase
-// at all (only Firebase's now-dead code ever applied val.features). Every
-// session's featuresMap was populated purely from that browser's own
+// at all. Every session's featuresMap was populated purely from that browser's own
 // localStorage, forever — never hydrated from the server on initial
 // connect or updated via realtime, regardless of how many times the page
 // was reloaded. Wired in below (initial connect + realtime), merged by
@@ -9267,52 +8995,12 @@ function renderMilestonesPage(){
 const DS_CFG_KEY='b2_datasource_cfg'; // persists user's chosen source config
 
 // ══════════════════════════════════════════════════════
-// ROOT-CAUSE FIX — Login Authentication
-// ──────────────────────────────────────────────────────
-// Previously, the Firebase connection details (apiKey / projectId /
-// databaseURL) and the "Use Firebase Authentication for login" flag were
-// ONLY ever stored in localStorage (b2_datasource_cfg), on whichever single
-// browser an admin used to open Settings → Data & Real-Time Sync and click
-// "Connect". A brand-new user created via User Management DID get a real
-// Firebase Authentication account AND a matching profile at users/<uid> in
-// Realtime Database — but when that user opened the deployed app for the
-// first time on their OWN device, THEIR browser's localStorage had no
-// b2_datasource_cfg at all. fbAuthIsEnabled() therefore returned false, and
-// doLogin() silently fell back to the local/per-device username+password
-// check against an empty local user list — producing "Wrong Username or
-// Password" even though the account was fully and correctly created.
-//
-// Fix: bake the already-configured Firebase project into the app itself as
-// a default, so every browser/device starts out able to use Firebase
-// Authentication — without requiring each device to individually open
-// Settings and connect first. Fill in the 3 values below with the exact
-// values already entered in Settings → Data & Real-Time Sync → Firebase
-// (or from Firebase Console → Project Settings → General → Your apps →
-// Web config). This does not change how Settings/Connect itself works —
-// it is only used as a fallback for devices that haven't connected yet.
-const DEFAULT_FB_CONFIG={
-  // Task Fix (Supabase Migration — Phase 2): the Firebase project this default
-  // pointed at became unavailable, and Supabase is now the default backend
-  // (see DEFAULT_SB_CONFIG and _dsAutoReconnect below). Automatic Firebase
-  // Authentication for unconfigured devices is disabled here as a result —
-  // local username/password sign-in remains the default login path. This
-  // does not touch any device that has its own authEnabled:true explicitly
-  // saved in Settings; it only changes the fallback for devices with no
-  // saved choice.
-  authEnabled:false,
-  fb:{
-    apiKey:'AIzaSyCAz3NBjvc6VXzxiiMsH2m2nEYxPeDqe-g',
-    projectId:'thilafushi-tracker',
-    databaseURL:'https://thilafushi-test.firebaseio.com/'
-  }
-};
-
-// Task Fix (Supabase Migration — Phase 2): baked-in default so every device/
-// browser — not just the one where an admin manually opened Settings and
-// clicked "Save Connection" — auto-connects to Supabase on boot. Mirrors the
-// existing DEFAULT_FB_CONFIG pattern exactly; feeds into the same cfg.sb
-// shape (_persist/_restore) and the same _dsSupabaseConnectCore(url, anonKey)
+// Baked-in default so every device/browser — not just the one where an
+// admin manually opened Settings and clicked "Save Connection" — auto-
+// connects to Supabase on boot. Feeds into the same cfg.sb shape
+// (_persist/_restore) and the same _dsSupabaseConnectCore(url, anonKey)
 // call already used everywhere else in the Supabase path.
+// ══════════════════════════════════════════════════════
 const DEFAULT_SB_CONFIG={
   sb:{
     url:'https://gcgkyphpyqdwcaiwprkf.supabase.co',
@@ -9339,10 +9027,7 @@ const TABLE_NAME =
         : 'b2_tracker_data';
 
 window._DS={
-  type:'local',           // active type: local | file | sheet | firebase | supabase
-  _fbApp:null,            // Firebase app instance
-  _fbRef:null,            // Firebase DB ref
-  _fbListener:null,       // unsubscribe handle
+  type:'local',           // active type: local | file | sheet | supabase
   _sbClient:null,         // Supabase client instance
   _sbChannel:null,        // Supabase realtime channel
 
@@ -9354,19 +9039,12 @@ window._DS={
     if(this.type==='local')return load();
     if(this.type==='file')return load();   // file: data already in localStorage after import
     if(this.type==='sheet')return this._sheetFetch();
-    if(this.type==='firebase')return load(); // firebase uses real-time listener; no manual pull needed
     if(this.type==='supabase')return load(); // supabase uses realtime channel; no manual pull needed
     return load();
   },
 
   /** Push data to external source (called by patched save()) */
   _onSave(appData){
-    if(this.type==='firebase'&&this._fbRef){
-      this._fbRef.set(this._serialize(appData)).catch(e=>{
-        console.error('Firebase save error:',e);
-        toast('⚠ Could not save to Firebase — changes are kept locally until reconnected');
-      });
-    }
     if(this.type==='supabase'){
       if(!this._sbClient){
         console.error('Supabase save skipped: not connected.');
@@ -9436,16 +9114,6 @@ window._DS={
   _persist(){
     try{
       const cfg={type:this.type};
-      if(document.getElementById('ds-fb-apikey'))cfg.fb={
-        apiKey:document.getElementById('ds-fb-apikey').value,
-        projectId:document.getElementById('ds-fb-projectid').value,
-        databaseURL:document.getElementById('ds-fb-dburl').value
-      };
-      const authChk=document.getElementById('ds-fb-auth-enabled');
-      if(authChk)cfg.authEnabled=authChk.checked;
-      else{ // preserve existing flag if the Data Settings form isn't mounted right now
-        try{const prev=JSON.parse(localStorage.getItem(DS_CFG_KEY)||'{}');if(prev.authEnabled)cfg.authEnabled=true;}catch(e2){}
-      }
       if(document.getElementById('ds-sheet-url'))cfg.sheetUrl=document.getElementById('ds-sheet-url').value;
       if(document.getElementById('ds-sb-url'))cfg.sb={
         url:document.getElementById('ds-sb-url').value,
@@ -9461,12 +9129,6 @@ window._DS={
       const cfg=JSON.parse(localStorage.getItem(DS_CFG_KEY)||'{}');
       if(cfg.type)this.type=cfg.type;
       if(cfg.sheetUrl&&document.getElementById('ds-sheet-url'))document.getElementById('ds-sheet-url').value=cfg.sheetUrl;
-      if(cfg.fb){
-        if(document.getElementById('ds-fb-apikey'))document.getElementById('ds-fb-apikey').value=cfg.fb.apiKey||'';
-        if(document.getElementById('ds-fb-projectid'))document.getElementById('ds-fb-projectid').value=cfg.fb.projectId||'';
-        if(document.getElementById('ds-fb-dburl'))document.getElementById('ds-fb-dburl').value=cfg.fb.databaseURL||'';
-      }
-      if(document.getElementById('ds-fb-auth-enabled'))document.getElementById('ds-fb-auth-enabled').checked=!!cfg.authEnabled;
       if(cfg.sb){
         if(document.getElementById('ds-sb-url'))document.getElementById('ds-sb-url').value=cfg.sb.url||'';
         if(document.getElementById('ds-sb-anonkey'))document.getElementById('ds-sb-anonkey').value=cfg.sb.anonKey||'';
@@ -9608,13 +9270,12 @@ function dsResetAllData(){
 }
 
 function _dsRefreshStatus(){
-  const typeLabels={local:'Local Storage',file:'File (JSON)',sheet:'Google Sheet',firebase:'Firebase Realtime',supabase:'Supabase'};
+  const typeLabels={local:'Local Storage',file:'File (JSON)',sheet:'Google Sheet',supabase:'Supabase'};
   const el=document.getElementById('ds-active-type');
   const msg=document.getElementById('ds-active-msg');
   const badge=document.getElementById('ds-active-status');
   if(el)el.textContent=typeLabels[window._DS.type]||window._DS.type;
   const connected=window._DS.type==='local'||window._DS.type==='file'||
-    (window._DS.type==='firebase'&&window._DS._fbApp!==null)||
     (window._DS.type==='supabase'&&window._DS._sbClient!==null);
   if(badge){
     badge.textContent=connected?'● Connected':'● Not Connected';
@@ -9626,7 +9287,7 @@ function _dsRefreshStatus(){
 }
 
 function _dsRefreshRows(){
-  ['local','file','sheet','firebase','supabase'].forEach(t=>{
+  ['local','file','sheet','supabase'].forEach(t=>{
     const row=document.getElementById('ds-row-'+t);
     if(row){
       row.classList.toggle('ds-row-active',window._DS.type===t);
@@ -9637,7 +9298,7 @@ function _dsRefreshRows(){
 
 // ── Local ──────────────────────────────────────────────
 // (Local Storage selection UI removed — localStorage is always the active
-// baseline data layer; other sources (File/Sheet/Firebase) sync on top of it.)
+// baseline data layer; other sources (File/Sheet/Supabase) sync on top of it.)
 
 
 function dsLocalExportBackup(){
@@ -9716,390 +9377,6 @@ async function dsSheetSync(){
     if(msgEl)msgEl.innerHTML='<span style="color:var(--red)">✕ Error: '+eH(e.message)+'. Check URL and Sheet is published publicly.</span>';
     toast('Sheet sync failed');
   }
-}
-
-// ── Firebase ──────────────────────────────────────────
-async function dsFirebaseConnect(){
-  // Root-cause fix (Firebase Retired — Split-Brain Data Loss): Firebase is
-  // no longer a supported backend — see the matching note in
-  // _dsAutoReconnect(). Blocking the manual Connect button too, so no
-  // device can establish a Firebase connection through any path.
-  const msgEl=document.getElementById('ds-firebase-msg');
-  if(msgEl)msgEl.innerHTML='<span style="color:var(--red)">✕ Firebase has been retired. Supabase is now the only supported backend.</span>';
-  return;
-}
-async function _dsFirebaseConnect_DISABLED(){
-  const apiKey=document.getElementById('ds-fb-apikey').value.trim();
-  const projectId=document.getElementById('ds-fb-projectid').value.trim();
-  const databaseURL=document.getElementById('ds-fb-dburl').value.trim();
-  await _dsFirebaseConnectCore(apiKey,projectId,databaseURL,{silent:false});
-}
-
-// Task Fix (Default Provider — Firebase): previously Firebase was only ever connected
-// when an admin opened Settings and clicked Connect. Every other browser/device (or a
-// fresh page load, since _restore() never re-established the actual connection) fell
-// back to 'local' with nothing wired up. Firebase is the default provider, so it must
-// auto-initialize on its own — this core function is shared by the manual Connect
-// button and by _dsAutoReconnect() at boot.
-// Task Fix (Auto-Load From Firebase): re-renders whichever page is currently
-// visible using fresh data (data/featuresMap reloaded from localStorage, which
-// the Firebase merge below keeps in sync). Called right after Firebase
-// delivers data — on initial connect/reconnect and on every realtime update —
-// so every page, table, tree, dropdown, and modal reflects the database
-// automatically: on app start, after login, after a browser refresh, and
-// after browser cache/local storage has been cleared, with no manual action
-// (like switching pages) required.
-function _dsRefreshActivePage(){
-  data=load();
-  initIdCounter(data.nodes); // keep this device's id counter ahead of whatever other devices have already created
-  try{featuresMap=JSON.parse(localStorage.getItem(FEAT_KEY))||{};}catch(e){featuresMap={};}
-  // Task Fix (Records With The Same Name Affecting Each Other / Phase Missing
-  // Children): both repairs previously only ran once at initial page boot,
-  // against whatever was in localStorage *before* Firebase had synced down —
-  // so they never actually touched the real, authoritative data once it
-  // arrived. Re-run them here, every time fresh data comes in from
-  // Firebase/Supabase, and persist the fix if either finds anything to correct.
-  const renested=_renestNodeTreeDeep(data.nodes);
-  const deduped=_dedupeNodeIds(data.nodes);
-  if(renested||deduped){
-    save();
-    saveFeatures();
-  }
-  updateStats();
-  ALL_PAGES.forEach(page=>{
-    const el=document.getElementById('page-'+page);
-    if(!el||!el.classList.contains('active'))return;
-    if(page==='dashboard')renderDashboard();
-    else if(page==='tracker')render();
-    else if(page==='timeline')renderTimeline();
-    else if(page==='teams')renderTeams();
-    else if(page==='meetings')renderMeetings();
-    else if(page==='mom')renderMomTable();
-    else if(page==='mytask')renderMyTaskTable();
-    else if(page==='perf')renderPerformance();
-    else if(page==='prod')renderProductivity();
-    else if(page==='users')renderUserTable();
-    else if(page==='at')renderATPage();
-    else if(page==='fh')renderFHPage();
-    else if(page==='sb')renderSprintBoard();
-    else if(page==='syslogs')renderSystemLogs();
-    else if(page==='milestones')renderMilestonesPage();
-    else if(page==='assetreadiness')renderAssetReadiness();
-    else if(page==='templates')renderTemplatesPage();
-    else if(page==='gantt')renderGanttChart();
-    // 'datasetting' intentionally excluded — it holds live connection-setup
-    // form fields a person may be mid-edit on; it already reloads on its own
-    // whenever it's opened via showPage().
-  });
-  renderSidebarFeatures();
-  // Keep the currently selected tree node's detail/side panel and Activity
-  // tab in sync too, mirroring what selectNode() already does.
-  if(typeof selectedId!=='undefined'&&selectedId){
-    const _rn=findNode(selectedId,data.nodes);
-    if(_rn)renderDetail(selectedId);
-  }
-}
-
-async function _dsFirebaseConnectCore(apiKey,projectId,databaseURL,opts){
-  opts=opts||{};
-  const msgEl=document.getElementById('ds-firebase-msg');
-
-  // ── Input validation ──────────────────────────────
-  if(!apiKey||!projectId||!databaseURL){
-    if(!opts.silent&&msgEl)msgEl.innerHTML='<span style="color:var(--amber)">⚠ Fill in all three fields: API Key, Project ID, and Database URL.</span>';
-    return false;
-  }
-  if(!apiKey.startsWith('AIza')){
-    if(!opts.silent&&msgEl)msgEl.innerHTML='<span style="color:var(--amber)">⚠ API Key looks invalid — should start with "AIza…". Copy it from Firebase Console → Project Settings.</span>';
-    return false;
-  }
-  if(databaseURL.includes('console.firebase.google.com')){
-    if(!opts.silent&&msgEl)msgEl.innerHTML='<span style="color:var(--red)">✕ Wrong URL! That is the Firebase Console website, not your Database URL.<br>Correct format: <code>https://'+eH(projectId)+'-default-rtdb.firebaseio.com</code><br>Find it in Firebase Console → Realtime Database → Data tab.</span>';
-    return false;
-  }
-  if(!databaseURL.includes('firebaseio.com')&&!databaseURL.includes('firebasedatabase.app')){
-    if(!opts.silent&&msgEl)msgEl.innerHTML='<span style="color:var(--amber)">⚠ Database URL should end with <code>.firebaseio.com</code><br>Example: <code>https://'+eH(projectId)+'-default-rtdb.firebaseio.com</code></span>';
-    return false;
-  }
-
-  if(!opts.silent&&msgEl)msgEl.innerHTML='<span style="color:var(--muted)">⏳ Loading Firebase SDK…</span>';
-
-  try{
-    // ── Load Firebase compat SDK (v8-style API, simpler) ──
-    if(!window.firebase||!window.firebase.database){
-      await _dsLoadScript('https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js');
-      await _dsLoadScript('https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js');
-    }
-    // Task 2 (Secure Database Rules — compatibility): the Auth SDK is now
-    // always loaded, not just when Firebase Authentication is explicitly
-    // enabled. This is what makes 'auth != null' database rules safe to
-    // adopt without breaking any existing deployment — see the anonymous
-    // sign-in below.
-    if(!window.firebase.auth){
-      await _dsLoadScript('https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js');
-    }
-
-    // ── Tear down any existing app cleanly ────────────
-    if(window._DS._fbListener&&window._DS._fbRef){
-      try{window._DS._fbRef.off('value',window._DS._fbListener);}catch(e){}
-      window._DS._fbListener=null;
-      window._DS._fbRef=null;
-    }
-    if(window._DS._fbApp){
-      try{await window._DS._fbApp.delete();}catch(e){}
-      window._DS._fbApp=null;
-    }
-    // Also clean up any pre-existing DEFAULT app
-    if(window.firebase.apps&&window.firebase.apps.length>0){
-      for(const app of window.firebase.apps){
-        try{await app.delete();}catch(e){}
-      }
-    }
-
-    if(!opts.silent&&msgEl)msgEl.innerHTML='<span style="color:var(--muted)">⏳ Connecting to Firebase…</span>';
-
-    // ── Initialize ─────────────────────────────────────
-    const cfg={
-      apiKey,
-      authDomain:projectId+'.firebaseapp.com',
-      databaseURL:databaseURL.endsWith('/')?databaseURL.slice(0,-1):databaseURL,
-      projectId
-    };
-    window._DS._fbApp=window.firebase.initializeApp(cfg); // DEFAULT app
-
-    // Task 2 (Secure Database Rules — compatibility): ensure this session is
-    // authenticated before any read/write. If the admin has enabled full
-    // email/password Firebase Auth and the user already signed in via
-    // firebaseSignIn(), window.firebase.auth().currentUser is already set —
-    // leave that session alone. Otherwise, sign in anonymously so
-    // 'auth != null' security rules never block normal syncing for
-    // deployments that haven't set up user-based Firebase Auth.
-    if(!window.firebase.auth().currentUser){
-      try{
-        await window.firebase.auth().signInAnonymously();
-      }catch(authErr){
-        // Bug fix: this previously only surfaced when opts.silent was false
-        // (i.e. only if the person was actively sitting on the Data Settings
-        // page mid-connect). The much more common case — auto-reconnect on
-        // page load — always runs with silent:true, so a failure here used
-        // to fail completely silently: no data, no visible reason why.
-        // Always log to console now, and show a toast whenever the UI is
-        // available, regardless of silent mode.
-        console.error('Firebase authentication failed — sync cannot proceed:',authErr);
-        const friendlyMsg='Could not connect to Firebase: authentication failed ('+(authErr.code||authErr.message||'unknown error')+'). If your database rules require authentication, enable Anonymous sign-in under Firebase Console → Authentication → Sign-in method.';
-        if(!opts.silent&&msgEl)msgEl.innerHTML='<span style="color:var(--red)">✕ '+eH(friendlyMsg)+'</span>';
-        else if(typeof toast==='function')toast(friendlyMsg,'error');
-        return false;
-      }
-    }
-
-    const db=window.firebase.database();
-    window._DS._fbRef=db.ref('b2_tracker');
-
-    if(!opts.silent&&msgEl)msgEl.innerHTML='<span style="color:var(--muted)">⏳ Testing connection…</span>';
-
-    // ── Test connectivity before committing, and capture whatever is already
-    // stored in Firebase so we know below whether it's safe to write to it ──
-    let _fbExistingVal=null;
-    await new Promise((resolve,reject)=>{
-      const timer=setTimeout(()=>reject(new Error('Connection timed out (10s). Check Database URL and Firebase rules allow read/write.')),10000);
-      window._DS._fbRef.once('value',
-        snap=>{clearTimeout(timer);_fbExistingVal=snap.val();resolve();},
-        err=>{clearTimeout(timer);reject(err);}
-      );
-    });
-
-    // ── Attach real-time listener ──────────────────────
-    // Task Fix (Real-Time Sync): previously this listener only merged
-    // val.nodes back into local state, so the task/project tree updated
-    // live across devices but Users and Meetings did NOT — a change made
-    // on one device (e.g. creating a user, editing a meeting) was pushed
-    // UP to Firebase but never pulled back DOWN to other already-connected
-    // devices until they manually reconnected. Users and Meetings are now
-    // merged back in the same way nodes always were.
-    window._DS._fbListener=window._DS._fbRef.on('value',snap=>{
-      const val=snap.val();
-      if(!val)return;
-      let changed=false;
-      window._DS._applyingRemote=true;
-      try{
-        // Task Fix (Data Not Loading): _serialize() stores the project tree
-        // under the key "modules" (see _serialize below), but this was
-        // checking "val.nodes" — a key that never actually exists in the
-        // stored payload — so the Project Structure tree was never being
-        // pulled down from Firebase. Fixed to match the key _serialize()
-        // really writes (same key the Supabase sync path already reads).
-        if(val.modules){
-          mergeIncomingNodeTombstones(val.deletedNodes);
-          data=Object.assign({},data,{nodes:_dsMergeIncomingNodes(val.modules)});
-          localStorage.setItem(STORE_KEY,JSON.stringify(data)); // keep localStorage in sync
-          changed=true;
-        }
-        if(val.users){
-          mergeIncomingTombstones(val.deletedUsers);
-          mergeIncomingRecreatedMarkers(val.recreatedUsers);
-          saveUsers(_dsMergeIncomingUsers(val.users));
-          changed=true;
-        }
-        if(val.meetings){
-          saveMeetings(Array.isArray(val.meetings)?val.meetings:Object.values(val.meetings));
-          changed=true;
-        }
-        if(val.teams){
-          mergeIncomingTeamTombstones(val.deletedTeams);
-          localStorage.setItem(TEAMS_KEY,JSON.stringify(_dsMergeIncomingTeams(val.teams)));
-          initTmId(); // Root-cause fix: resync the id counter so a locally-created member can never reuse an id that just arrived from Firebase
-          changed=true;
-        }
-        if(val.milestones){
-          localStorage.setItem(MILESTONES_KEY,JSON.stringify(Array.isArray(val.milestones)?val.milestones:Object.values(val.milestones)));
-          changed=true;
-        }
-        if(val.templates){
-          localStorage.setItem(TEMPLATES_KEY,JSON.stringify(Array.isArray(val.templates)?val.templates:Object.values(val.templates)));
-          changed=true;
-        }
-        // Root-cause fix: restore Master Features (Task Board), Meeting
-        // Minutes (My Tasks' Meeting source), and the meeting-feature
-        // assignment bridge — previously never synced, so they never came
-        // back after a local storage clear.
-        if(val.masterFeatures){
-          saveMasterFeats(Array.isArray(val.masterFeatures)?val.masterFeatures:Object.values(val.masterFeatures));
-          changed=true;
-        }
-        if(val.mom){
-          saveMomList(Array.isArray(val.mom)?val.mom:Object.values(val.mom));
-          changed=true;
-        }
-        if(val.mtgFeats){
-          saveMtgFeats(Array.isArray(val.mtgFeats)?val.mtgFeats:Object.values(val.mtgFeats));
-          changed=true;
-        }
-        // Priority 1 fix (featuresMap sync): _serialize() has always pushed
-        // featuresMap up to Firebase under "features", but nothing ever read
-        // it back down — every other synced key above has a matching restore
-        // branch except this one. Firebase can return a keyed object as a
-        // plain array if its keys happen to be sequential integers starting
-        // at 0, so normalize back to the {nodeId: [...]} shape featuresMap
-        // always has before saving.
-        if(val.features){
-          featuresMap=Array.isArray(val.features)?Object.assign({},val.features):val.features;
-          saveFeatures();
-          changed=true;
-        }
-      }finally{
-        window._DS._applyingRemote=false;
-      }
-      if(changed){
-        _dsRefreshActivePage();
-      }
-    },err=>{
-      console.error('Firebase realtime listener error:',err);
-      const m=document.getElementById('ds-firebase-msg');
-      if(m)m.innerHTML='<span style="color:var(--red)">✕ Realtime listener error: '+eH(err.message)+'</span>';
-    });
-
-    // ── Sync with Firebase without ever overwriting existing remote data ──
-    // Task Fix (Data Loss on Browser-Data Clear): this used to unconditionally
-    // push the app's *current local* data up to Firebase on every single
-    // connect — including the silent auto-reconnect that runs on every page
-    // load (_dsAutoReconnect). If a person cleared their browser's local
-    // storage (Ctrl+Shift+Delete), the app booted with empty/default local
-    // data, then this call blindly overwrote the real records in Firebase
-    // with that empty data. Firebase must be the single source of truth:
-    // clearing local/browser data should only ever cause a *read* from
-    // Firebase to rebuild local state, and must never trigger a write that
-    // could erase real records. Delete operations must only ever happen via
-    // explicit user action inside the app (e.g. the Edit modal's Delete
-    // button), never as a side-effect of connecting/reconnecting.
-    if(_fbExistingVal){
-      // Firebase already holds real data — apply it to local state right away
-      // (rather than waiting for the next 'value' event) so a freshly-cleared
-      // browser recovers its data automatically, with no manual steps needed.
-      // Local data is never pushed over it.
-      window._DS._applyingRemote=true;
-      try{
-        if(_fbExistingVal.modules){
-          mergeIncomingNodeTombstones(_fbExistingVal.deletedNodes);
-          data=Object.assign({},data,{nodes:_dsMergeIncomingNodes(_fbExistingVal.modules)});
-          localStorage.setItem(STORE_KEY,JSON.stringify(data));
-        }
-        if(_fbExistingVal.users){mergeIncomingTombstones(_fbExistingVal.deletedUsers);mergeIncomingRecreatedMarkers(_fbExistingVal.recreatedUsers);saveUsers(_dsMergeIncomingUsers(_fbExistingVal.users));}
-        if(_fbExistingVal.meetings)saveMeetings(Array.isArray(_fbExistingVal.meetings)?_fbExistingVal.meetings:Object.values(_fbExistingVal.meetings));
-        if(_fbExistingVal.teams){mergeIncomingTeamTombstones(_fbExistingVal.deletedTeams);localStorage.setItem(TEAMS_KEY,JSON.stringify(_dsMergeIncomingTeams(_fbExistingVal.teams)));initTmId();}
-        if(_fbExistingVal.milestones)localStorage.setItem(MILESTONES_KEY,JSON.stringify(Array.isArray(_fbExistingVal.milestones)?_fbExistingVal.milestones:Object.values(_fbExistingVal.milestones)));
-        if(_fbExistingVal.templates)localStorage.setItem(TEMPLATES_KEY,JSON.stringify(Array.isArray(_fbExistingVal.templates)?_fbExistingVal.templates:Object.values(_fbExistingVal.templates)));
-      }finally{
-        window._DS._applyingRemote=false;
-      }
-      _dsRefreshActivePage();
-    } else if(!opts.isAutoReconnect){
-      // Firebase is genuinely empty (a brand-new database) AND a person
-      // explicitly clicked "Connect" in Settings — safe to seed it with
-      // whatever this browser currently holds, so existing local-only work
-      // isn't lost. The silent auto-reconnect at boot never takes this
-      // branch, since it must never be the one writing to Firebase.
-      await window._DS._fbRef.set(window._DS._serialize(data));
-    }
-
-    // ── Success ────────────────────────────────────────
-    window._DS.setDataSource('firebase');
-    _dsRefreshRows();_dsRefreshStatus();
-    const btn=document.getElementById('ds-fb-disconnect-btn');if(btn)btn.style.display='';
-    if(msgEl)msgEl.innerHTML=
-      '<span style="color:var(--green)">✓ Connected — <strong>'+eH(projectId)+'</strong> realtime sync active.</span>';
-    if(!opts.silent)toast('Firebase connected ✓');
-    return true;
-
-  }catch(e){
-    console.error('Firebase connection error:',e); // detailed error for debugging
-    // Clean up on failure
-    if(window._DS._fbListener&&window._DS._fbRef){
-      try{window._DS._fbRef.off('value',window._DS._fbListener);}catch(x){}
-      window._DS._fbListener=null;
-    }
-    if(window._DS._fbApp){
-      try{await window._DS._fbApp.delete();}catch(x){}
-      window._DS._fbApp=null;
-    }
-
-    let hint='';
-    const msg=e.message||'';
-    if(msg.includes('permission')||msg.includes('PERMISSION_DENIED')){
-      hint='<br><strong>Fix:</strong> Firebase Console → Realtime Database → Rules → set <code>".read": true, ".write": true</code> for testing.';
-    } else if(msg.includes('no-app')||msg.includes('initializeApp')){
-      hint='<br><strong>Fix:</strong> SDK initialisation failed. Try refreshing the page and connecting again.';
-    } else if(msg.includes('timed out')){
-      hint='<br><strong>Fix:</strong> Verify Database URL is the Realtime Database URL (not Firestore). Enable Realtime Database in Firebase Console.';
-    } else if(msg.includes('invalid')||msg.includes('Invalid')){
-      hint='<br><strong>Fix:</strong> Double-check your API Key and Project ID from Firebase Console → Project Settings.';
-    }
-
-    if(!opts.silent&&msgEl)msgEl.innerHTML='<span style="color:var(--red)">✕ Connection failed: '+eH(msg)+hint+'</span>';
-    // Bug fix: this previously only toasted when opts.silent was false —
-    // the far more common auto-reconnect-on-page-load path always runs
-    // silent, so a permission/rules failure here used to disappear with
-    // nothing but a console log most people never check. Now it's visible
-    // either way — as the settings-page message when that's on screen, or
-    // as a toast otherwise.
-    if(!opts.silent&&msgEl){/* message already shown above */}
-    else if(typeof toast==='function')toast('Firebase sync failed: '+msg,'error');
-    if(!opts.silent)toast('Firebase connection failed');
-    return false;
-  }
-}
-
-function dsFirebaseDisconnect(){
-  try{
-    if(window._DS._fbRef&&window._DS._fbListener)window._DS._fbRef.off('value',window._DS._fbListener);
-    if(window._DS._fbApp)window._DS._fbApp.delete().catch(()=>{});
-    window._DS._fbApp=null;window._DS._fbRef=null;window._DS._fbListener=null;
-  }catch(e){}
-  window._DS.setDataSource('local');
-  _dsRefreshRows();_dsRefreshStatus();
-  document.getElementById('ds-fb-disconnect-btn').style.display='none';
-  document.getElementById('ds-firebase-msg').innerHTML='<span style="color:var(--muted)">Disconnected.</span>';
-  toast('Firebase disconnected');
 }
 
 function _dsLoadScript(src){
@@ -10218,7 +9495,7 @@ async function _dsSupabaseConnectCore(url,anonKey,opts){
 
     window._DS._sbClient=client;
 
-    // ── Attach real-time channel (same merge behaviour as Firebase) ──
+    // ── Attach real-time channel ──
     window._DS._sbChannel=client.channel(TABLE_NAME+'_changes')
       .on('postgres_changes',{event:'*',schema:'public',table:TABLE_NAME,filter:'id=eq.main'},payload=>{
         try{
@@ -10270,12 +9547,11 @@ async function _dsSupabaseConnectCore(url,anonKey,opts){
             window._DS._applyingRemote=false;
           }
           // Root-cause fix (Duplicate Node ID repair): initIdCounter/_dedupeNodeIds
-          // already exist and are correctly wired into the Firebase sync path, but
-          // were never called from Supabase's — the app's actual current primary
-          // provider — so this self-healing repair has effectively never run in
-          // real operation. Mirrors Firebase's _dsRefreshActivePage() exactly: keep
-          // the id counter advanced, then repair any duplicate ids and persist the
-          // correction if anything changed.
+          // exist but were never called from this Supabase realtime handler —
+          // the app's actual current primary sync path — so this self-healing
+          // repair has effectively never run in real operation. Wired in here:
+          // keep the id counter advanced, then repair any duplicate ids and
+          // persist the correction if anything changed.
           if(val&&val.modules){
             if(incomingUpdatedAt)data.lastUpdated=incomingUpdatedAt;
             initIdCounter(data.nodes);
@@ -10349,15 +9625,10 @@ async function _dsSupabaseConnectCore(url,anonKey,opts){
 }
 
 // Reconnect automatically on page load using the active data source.
-// Task Fix (Supabase Migration — Phase 2): Supabase is now the default
-// provider (the Firebase project this previously defaulted to became
-// unavailable). Firebase auto-connect is no longer the automatic fallback —
-// it now only runs if a device has cfg.type==='firebase' explicitly saved,
-// i.e. an admin deliberately connected it on that device before. Every other
-// device — including brand-new/cleared browsers — auto-connects to Supabase,
-// using this browser's own saved cfg.sb if present, otherwise falling back
-// to the baked-in DEFAULT_SB_CONFIG (same fallback pattern DEFAULT_FB_CONFIG
-// used for Firebase).
+// Supabase is the only supported provider — every device, including
+// brand-new/cleared browsers, auto-connects to Supabase using this
+// browser's own saved cfg.sb if present, otherwise falling back to the
+// baked-in DEFAULT_SB_CONFIG.
 // Single source of truth for resolving this browser's Supabase URL/anon
 // key: this browser's saved cfg.sb if present, otherwise the one baked-in
 // DEFAULT_SB_CONFIG constant. Synchronous — no network call, nothing to
@@ -10371,27 +9642,7 @@ function _dsResolveSbConfig(){
 }
 async function _dsAutoReconnect(){
   try{
-    const cfg=JSON.parse(localStorage.getItem(DS_CFG_KEY)||'{}');
-
-    // Root-cause fix (Firebase Retired — Split-Brain Data Loss): Firebase is
-    // no longer a supported backend. Previously, any device with an old
-    // cfg.type==='firebase' saved in ITS OWN localStorage from before the
-    // Supabase migration would silently reconnect to Firebase here on every
-    // boot — invisibly diverging from Supabase (the source of truth every
-    // other device uses) with no error or indicator anywhere. Data added on
-    // that device never reached Supabase (looked like data loss to everyone
-    // else); if that device was later pointed at Supabase, its
-    // Firebase-shaped local cache could merge back in looking corrupted
-    // (matches the delayed/orphaned reappearance reported). This branch is
-    // now dead code — every device always goes straight to Supabase below,
-    // regardless of what's saved locally, so this scenario can never
-    // recur on any device, old or new.
-    if(false&&cfg.type==='firebase'&&cfg.fb&&cfg.fb.apiKey){
-      await _dsFirebaseConnectCore(cfg.fb.apiKey,cfg.fb.projectId,cfg.fb.databaseURL,{silent:true,isAutoReconnect:true});
-      return;
-    }
-
-    // Supabase: default provider. Config resolution delegated to
+    // Supabase: default (and only) provider. Config resolution delegated to
     // _dsResolveSbConfig() — the single shared resolver (see above).
     const sbCfg=_dsResolveSbConfig();
     if(sbCfg&&sbCfg.url&&sbCfg.anonKey){
@@ -10486,8 +9737,7 @@ async function _dsGetAuthClient(){
 // returns success:false with stage:'profile' and the auth uid so the
 // caller can surface a specific, non-generic message. There is no
 // client-safe way to delete the now-orphaned Auth account (that requires
-// the Admin API / service_role key, same limitation this codebase already
-// documents for the existing Firebase Auth path) — this is disclosed to
+// the Admin API / service_role key) — this is disclosed to
 // the caller, not hidden.
 // Case B (auth fails): returns immediately, profiles is never touched.
 // Case C (both succeed): only then is success:true returned.
@@ -11388,9 +10638,8 @@ function renderUserTable(){
   });
 }
 // Task 1 (User List Display — root cause fix): shared local-account
-// creation path, reused both for the normal "Firebase Auth is off" case and
-// as a safety-net fallback when Firebase Auth is on but unreachable — see
-// umCreateUser()'s catch block below.
+// creation path used by umCreateUser() for every new user's local record
+// (Supabase Authentication is provisioned alongside it separately).
 async function _umCreateLocalAccount(users,fullName,username,employeeNo,department,password,role,status){
   const hash=await hashPw(password);
   // Root-cause fix (Local User List Race): the `users` array passed in was
@@ -11428,123 +10677,9 @@ async function umCreateUser(){
   const users=loadUsers();
   if(users.find(u=>u.username.toLowerCase()===username)){errEl.textContent='User Name already exists.';errEl.style.display='';return;}
 
-  // Task 3: when Firebase Authentication is enabled, create the account in Firebase Auth
-  // and store ONLY the profile (no password) in Realtime Database at users/<uid>.
-  if(fbAuthIsEnabled()){
-    // Task Fix (User Creation — API Key error): validate the configured Firebase API
-    // Key looks like a real key BEFORE making any network request. Previously an
-    // invalid/placeholder key would reach Google's Identity Toolkit API, which
-    // returned a raw technical JSON error that was then shown directly to the user.
-    const _fbCfgCheck=fbGetSavedConfig();
-    const _apiKey=_fbCfgCheck&&_fbCfgCheck.fb&&_fbCfgCheck.fb.apiKey;
-    if(!_apiKey||!_apiKey.startsWith('AIza')||_apiKey.indexOf('PASTE_YOUR')!==-1){
-      console.error('User creation aborted: Firebase API Key is missing or invalid.',_fbCfgCheck);
-      errEl.textContent='User creation is temporarily unavailable. Please contact your administrator.';
-      errEl.style.display='';
-      return;
-    }
-    let secondaryApp=null,createdCred=null;
-    try{
-      const fb=await fbEnsureAuthApp();
-      secondaryApp=fb.initializeApp(fb.app().options,'UserCreation_'+Date.now());
-      const cred=await secondaryApp.auth().createUserWithEmailAndPassword(username,password);
-      createdCred=cred;
-      const uid=cred.user.uid;
-      const perms=getDefaultPerms(role);
-      try{
-        await fb.database().ref('users/'+uid).set({fullName,email:username,role,department,status,employeeNo,permissions:perms,createdAt:new Date().toISOString()});
-      }catch(dbErr){
-        // Task Fix (Prevent Partial User Creation): the Auth account was created but the
-        // profile write failed — roll back the Auth account so we never leave an
-        // orphaned account with no profile that could sign in but see broken state.
-        console.error('User creation: database write failed, rolling back Auth account.',dbErr);
-        try{await cred.user.delete();}catch(rollbackErr){console.error('Rollback failed:',rollbackErr);}
-        throw dbErr;
-      }
-      await secondaryApp.auth().signOut();
-      await secondaryApp.delete();
-      // Root-cause fix (Local User List Race): re-fetch fresh here rather
-      // than pushing onto the `users` array captured before these Firebase
-      // network calls — a deletion made elsewhere during that time would
-      // otherwise be silently overwritten by this save.
-      const freshUsers2=loadUsers();
-      // Mirror locally (no password hash) so RBAC/user list rendering works unchanged
-      freshUsers2.push({username,email:username,fullName,employeeNo,department,status,role,uid,authMode:'firebase',permissions:perms});
-      saveUsers(freshUsers2);
-      ['um-new-fullname','um-new-username','um-new-empno','um-new-department','um-new-password'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
-      renderUserTable();
-      populateLoginDropdown();
-      toast('User "'+username+'" created in Firebase Authentication ('+role+')');
-    }catch(err){
-      console.error('User creation error:',err); // full technical detail for debugging only
-      if(secondaryApp&&!createdCred){try{await secondaryApp.delete();}catch(e){}}
-      // Task 1 (User List Display — root cause): with Firebase Authentication
-      // enabled by default (see fbGetSavedConfig()'s DEFAULT_FB_CONFIG
-      // fallback), any hiccup reaching that project — network issue, quota,
-      // misconfiguration — previously left the admin with just an error
-      // toast and NO account created at all, so the "new" user could never
-      // appear in the User List on this or any later page load. Genuine
-      // validation failures (duplicate email, weak password, malformed
-      // email) still stop here and show the real error, unchanged; anything
-      // else now falls back to a local account so creation always succeeds.
-      const _code=(err&&err.code)||'';
-      // Task Fix (Task 2 — Orphaned Auth Account Recovery): client-side
-      // Firebase Auth has no way to delete another user's Auth account
-      // (that needs a backend Admin SDK) — so umDeleteUser() can only ever
-      // remove the app's own profile/mirror record, never the underlying
-      // Auth credential. That credential survives every deletion, so
-      // re-creating the same user later always hits "email already in
-      // use" even though the app and Realtime DB profile are gone. If the
-      // admin provides the SAME password the orphaned account was created
-      // with, sign in to recover its UID and restore the profile instead
-      // of leaving them permanently stuck.
-      if(_code==='auth/email-already-in-use'){
-        try{
-          const fb2=await fbEnsureAuthApp();
-          const recoverApp=fb2.initializeApp(fb2.app().options,'UserRecovery_'+Date.now());
-          const recoverCred=await recoverApp.auth().signInWithEmailAndPassword(username,password);
-          const uid=recoverCred.user.uid;
-          const perms=getDefaultPerms(role);
-          await fb2.database().ref('users/'+uid).set({fullName,email:username,role,department,status,employeeNo,permissions:perms,createdAt:new Date().toISOString()});
-          await recoverApp.auth().signOut();
-          await recoverApp.delete();
-          // Root-cause fix (Local User List Race): re-fetch fresh here for
-          // the same reason as the main creation path above.
-          const freshUsers3=loadUsers();
-          freshUsers3.push({username,email:username,fullName,employeeNo,department,status,role,uid,authMode:'firebase',permissions:perms});
-          saveUsers(freshUsers3);
-          ['um-new-fullname','um-new-username','um-new-empno','um-new-department','um-new-password'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
-          renderUserTable();
-          populateLoginDropdown();
-          toast('User "'+username+'" restored (existing Firebase Authentication account recovered)');
-        }catch(recoverErr){
-          console.error('Orphaned-account recovery failed:',recoverErr);
-          errEl.textContent='That email is already registered in Firebase Authentication with a different password. Use a different email, or remove the account from the Firebase Console if it should be freed up permanently.';
-          errEl.style.display='';
-        }
-        return;
-      }
-      const _isValidationError=['auth/weak-password','auth/invalid-email'].includes(_code);
-      if(_isValidationError){
-        errEl.textContent=fbFriendlyError(err); // never expose raw Firebase/API error text
-        errEl.style.display='';
-        return;
-      }
-      try{
-        await _umCreateLocalAccount(users,fullName,username,employeeNo,department,password,role,status);
-        toast('User "'+username+'" created ('+role+') — Firebase Authentication was unreachable, so a local account was used instead');
-      }catch(fallbackErr){
-        console.error('Local fallback account creation also failed:',fallbackErr);
-        errEl.textContent=fbFriendlyError(err);
-        errEl.style.display='';
-      }
-    }
-    return;
-  }
-
-  // Existing local account creation (default — used whenever Firebase Auth is not enabled)
-  // UNCHANGED: this is exactly what ran before Phase 2. Existing login, session,
-  // and permissions all continue to depend on this local account only.
+  // Local account creation (Supabase Authentication is provisioned alongside
+  // it below). Existing login, session, and permissions all continue to
+  // depend on this local account.
   await _umCreateLocalAccount(users,fullName,username,employeeNo,department,password,role,status);
 
   // Phase 2 addition: also provision the user in Supabase Authentication + profiles.
@@ -11574,15 +10709,7 @@ async function umCreateUser(){
 function umDeleteUser(username){
   if(username===SUPERADMIN)return;
   let users=loadUsers();
-  const target=users.find(u=>u.username===username);
-  // Task Fix (Task 2 — Prevent Recurrence): client-side Firebase Auth can't
-  // delete another user's Auth account (needs a backend Admin SDK), so this
-  // only ever removes the app's own profile record. Tell the admin up
-  // front so this doesn't come as a surprise later — re-creating the user
-  // with the same password will recover it (see umCreateUser()).
-  const warning=(target&&target.authMode==='firebase')
-    ?'Delete this user?\n\nThis removes them from the app, but their Firebase Authentication account can\'t be deleted from here and will remain reserved under this email. Re-creating the user later with the same password will recover it automatically.'
-    :'Delete this user? This cannot be undone.';
+  const warning='Delete this user? This cannot be undone.';
   if(!confirm(warning))return;
   users=users.filter(u=>u.username!==username);
   recordDeletedUserTombstone(username);
@@ -11859,18 +10986,19 @@ function _dedupeNodeIds(nodes){
   })(nodes);
   return changed;
 }
-// Task Fix (Add Phase/Job/Task crash): Firebase Realtime Database does not
-// store empty arrays/objects — a node saved with children:[] comes back from
-// Firebase with the "children" key missing entirely. Any node that currently
-// has zero children (a Project with no Phases yet, a Phase with no Jobs yet,
-// etc.) would then crash when adding its first child, since code elsewhere
-// pushes directly onto node.children. This walks the tree and restores a real
-// array wherever it's missing, so parent.children.push(...) is always safe.
+// Task Fix (Add Phase/Job/Task crash): some stored records — including
+// legacy data carried over from this app's previous real-time backend —
+// come back with the "children" key missing entirely instead of an empty
+// array. Any node that currently has zero children (a Project with no
+// Phases yet, a Phase with no Jobs yet, etc.) would then crash when adding
+// its first child, since code elsewhere pushes directly onto node.children.
+// This walks the tree and restores a real array wherever it's missing, so
+// parent.children.push(...) is always safe.
 //
-// Task Fix (Phase Expand/Collapse Missing): Firebase also only reconstructs a
-// stored array as a true JS array when its keys are a contiguous 0..n-1
-// sequence — any gap (e.g. a Job that was deleted from the middle of a
-// Phase's children) makes Firebase hand back a plain numeric-keyed OBJECT
+// Task Fix (Phase Expand/Collapse Missing): that same legacy data source
+// only reconstructed a stored array as a true JS array when its keys were a
+// contiguous 0..n-1 sequence — any gap (e.g. a Job that was deleted from the
+// middle of a Phase's children) produced a plain numeric-keyed OBJECT
 // instead. An object has no real .length, so hasChildren (node.children &&
 // node.children.length>0) silently evaluated false — a Phase (or Job) with
 // real children underneath would render with no expand/collapse arrow at
@@ -11889,12 +11017,12 @@ function _normalizeNodeTree(nodes){
   return nodes;
 }
 // Root-cause fix (Project/Task/Sub Task Data Loss & Orphaned Sub Tasks):
-// every incoming Firebase/Supabase snapshot for the project tree ("modules")
+// every incoming Supabase snapshot for the project tree ("modules")
 // was applied with a blind, unconditional overwrite —
 // `data.nodes = <whatever the snapshot contains>` — completely replacing
 // the in-memory/local tree, with no protection for anything just added
 // locally that the snapshot doesn't yet reflect. addNode's push to
-// Supabase/Firebase happens synchronously as part of save(), but the
+// Supabase sync happens synchronously as part of save(), but the
 // snapshot that arrives back (this device's own realtime echo, another
 // tab's reconnect, or another device's stale pull-then-push) is not
 // guaranteed to already include it. When a lagging snapshot won that race,
@@ -12035,7 +11163,7 @@ function _dsMergeIncomingNodes(remoteNodes){
 // matches a node being deleted (tombstone recorded, confirmed in the
 // deletedNodes payload) yet still reappearing in the live table. Pruning
 // every tombstoned node (and its whole subtree) out of the tree at the
-// point of serialization — the single choke point every push (Firebase
+// point of serialization — the single choke point every push (Supabase)
 // and Supabase, manual export/sync included) already goes through — closes
 // this gap for good: a deletion can no longer be undone by a stale push,
 // from any device, for any reason.
@@ -12057,7 +11185,7 @@ function _dsPruneTombstonedNodes(nodes){
 // expanding a row was, from the data layer's point of view, indistinguishable
 // from any other node edit — it silently expanded the same row on everyone
 // else's screen too. Stripped here, at the single choke point every push
-// (Firebase and Supabase) already goes through, so it's never transmitted.
+// (Supabase) already goes through, so it's never transmitted.
 // It still persists across THIS browser's own reloads via the separate,
 // genuinely local STORE_KEY write in save() — only the outgoing shared
 // payload is affected. See _dsMergeIncomingNodes for the matching piece:
@@ -12131,7 +11259,7 @@ function save(){
   data.lastUpdated=new Date().toISOString();
   localStorage.setItem(STORE_KEY,JSON.stringify(data)); // always keep localStorage as live fallback
   // Notify DataSource layer (non-blocking; only active if user switched source).
-  // Skip when this save is just applying data that arrived FROM Firebase/Supabase
+  // Skip when this save is just applying data that arrived FROM Supabase
   // (see saveUsers for the full explanation of the feedback-loop this prevents).
   if(window._DS&&window._DS.type!=='local'&&!window._DS._applyingRemote)window._DS._onSave(data);
 }
@@ -14418,7 +13546,7 @@ function toggleOpen(node,wrapper){
   if(tog)tog.classList.toggle('open',node.open);
   // Task Fix (Phase Expand/Collapse Not Sticking): previously this never
   // persisted, so the very next data reload — which happens on every page
-  // navigation (showPage() always does data=load()) and on every Firebase
+  // navigation (showPage() always does data=load()) and on every Supabase
   // realtime sync triggered by ANY save anywhere in the app — silently
   // reverted the node back to its last-saved open state. A Phase collapsed
   // by the user would appear expanded again moments later, making the
@@ -14800,7 +13928,7 @@ function switchSideTab(tab){
 // the Project Structure hierarchy (data.nodes) each time it renders. Nothing
 // here is stored separately, so there's no duplicate data and no manual sync
 // step: editing a Phase/Job/Task and coming back to this page (or a
-// Firebase sync updating data in the background, which already calls
+// Supabase sync updating data in the background, which already calls
 // renderAssetReadiness() via _dsRefreshActivePage) always shows the current
 // state, because everything is re-derived from scratch on every render.
 // A "Phase" is treated as the Asset per the spec's Phase-Level data source.
@@ -14810,7 +13938,7 @@ function switchSideTab(tab){
 // id at the point the data is retrieved, so the same Job/Task or the same
 // Activity/Sub Task can never be counted twice in the chart — even if the
 // underlying children array has been merged/appended with an overlapping
-// set (e.g. by a background Firebase sync running concurrently). This is
+// set (e.g. by a background Supabase sync running concurrently). This is
 // the query-level fix requested: it guarantees distinct records at
 // retrieval time rather than filtering duplicates back out on display.
 function arDedupeNodesById(nodes){
@@ -15064,7 +14192,7 @@ function arViewPhase(phaseId){
 // Job/Task workflow chart for whichever asset (Phase) is selected — every
 // value here (Job names, Task names, progress) is read live from data.nodes,
 // nothing is stored separately, and this function re-runs automatically on
-// every Asset Readiness refresh (tab switch, page open, Firebase sync).
+// every Asset Readiness refresh (tab switch, page open, Supabase sync).
 let _wfSelectedPhaseId=null;
 let _wfSelectedTaskId=null; // Task 2 (Requirement 3 — Select Asset)
 function renderWorkflowProgress(){
@@ -15277,7 +14405,7 @@ function closeWfSubtaskModal(e){
 // ══════════════════════════════════════════════════════
 // Every row, date, bar, dependency line, and summary figure is derived live
 // from the Project Structure (data.nodes) — nothing here is stored
-// separately. Re-run automatically on page open and on every Firebase sync.
+// separately. Re-run automatically on page open and on every Supabase sync.
 // A "Project" (level 1) is the selectable planning unit; its Tasks
 // (level 2) and Sub Tasks (level 3) are the rows.
 let _ganttSelectedProgramId='all';
@@ -16026,6 +15154,12 @@ function renderFeatures(){
   }
   if(!feats.length){tbody.innerHTML='<tr><td colspan="4" class="feat-empty">No features yet.</td></tr>';return;}
   tbody.innerHTML='';
+  // Task Fix (Activity Delete Permission): the ✕ delete button is only
+  // rendered when the current user actually has canDeleteFeature() — it
+  // used to render unconditionally for everyone and rely solely on the
+  // in-function guard inside deleteFeat() (which still stays in place
+  // below as defense-in-depth). Users without the permission now simply
+  // don't see a delete option at all, instead of seeing one that errors.
   feats.forEach(f=>{
     const tr=document.createElement('tr');
     const curStatus=f.activityStatus||(f.done?'completed':'todo');
@@ -16039,7 +15173,7 @@ function renderFeatures(){
       </td>
       <td class="feat-status">${statusSelect}</td>
       <td style="text-align:center"><button class="icon-btn" onclick="openFeatModal(${f.id})">✎</button></td>
-      <td style="text-align:center"><button class="icon-btn" style="color:var(--red)" onclick="deleteFeat(${f.id})">✕</button></td>`;
+      <td style="text-align:center">${canDeleteFeature()?`<button class="icon-btn" style="color:var(--red)" onclick="deleteFeat(${f.id})">✕</button>`:''}</td>`;
     tbody.appendChild(tr);
   });
 }
@@ -17318,9 +16452,9 @@ function loadMom(){try{return JSON.parse(localStorage.getItem(MOM_KEY))||[];}cat
 function saveMomList(list){
   localStorage.setItem(MOM_KEY,JSON.stringify(list));
   // Root-cause fix (Meeting Minutes delete "reverting"): this previously
-  // only wrote to localStorage, never pushing the change up to Firebase —
+  // only wrote to localStorage, never pushing the change up to Supabase —
   // unlike save()/saveUsers()/saveMeetings(). That meant a deletion worked
-  // locally but Firebase still held the old list; the next incoming
+  // locally but Supabase still held the old list; the next incoming
   // realtime sync (from this tab reconnecting, another tab, or another
   // user's edit) would merge that stale list back in and silently undo the
   // deletion. Now pushes immediately, exactly like every other store.
@@ -18742,8 +17876,8 @@ if(_bootRenested||_bootDeduped){
       // confirm the underlying Supabase session is still actually valid
       // before trusting the local session flag — otherwise a
       // revoked/expired Supabase session would silently restore full app
-      // access based on a stale local flag alone. Local and Firebase-mode
-      // sessions restore exactly as before this change.
+      // access based on a stale local flag alone. Local sessions restore
+      // exactly as before this change.
       if(existingSession.authMode==='supabase'){
         const authClient=await _dsGetAuthClient();
         const {data:{session:liveSession}}=await authClient.auth.getSession();

@@ -1054,34 +1054,22 @@ body.readonly .icon-btn.tl-expand-details-btn{pointer-events:auto;opacity:1;}
       </div>
       <div class="side-tabs">
         <button class="side-tab active" id="tab-details"  onclick="switchSideTab('details')">📋 Details</button>
-        <button class="side-tab"        id="tab-features" onclick="switchSideTab('features')">✦ Activity</button>
+        <button class="side-tab"        id="tab-features" onclick="switchSideTab('features')">📝 Remarks</button>
       </div>
       <div class="side-tab-panel active" id="panel-details">
         <div class="side-content" id="side-content" style="padding:14px 18px;flex:1;overflow-y:auto;">
           <div class="detail-empty"><div class="icon">📋</div><p>Select an item to view details</p></div>
         </div>
       </div>
+      <!-- Task 2 (Subtask Remark History): replaces the old featuresMap
+           Activity list that used to live in this panel — that list (and
+           its underlying data/functions) is untouched elsewhere, just no
+           longer surfaced here. Shows the Remarks history (from the
+           existing Add/Edit Subtask modal's Remarks field, logged into the
+           node's own existing history[] array — same reuse pattern already
+           used by Phase Update History) for a selected Sub Task. -->
       <div class="side-tab-panel" id="panel-features">
-        <div class="feat-toolbar">
-          <span id="feat-count"></span>
-          <div style="display:flex;align-items:center;gap:8px">
-            <span id="feat-completion-pct" style="font-size:11px;font-weight:600;color:var(--accent);display:none"></span>
-            <button class="btn btn-ghost btn-sm" id="feat-expand-btn" onclick="openActivityDetailsModal()" style="display:none" title="View full activity information">⤢ Expand</button>
-            <button class="btn btn-primary btn-sm" id="feat-add-btn" onclick="openFeatModal()" style="display:none">+ Add Activity / Job</button>
-          </div>
-        </div>
-        <div id="feat-no-selection" style="padding:28px 14px;text-align:center;color:var(--muted2);font-size:12px;">📌 Select an item to view its features.</div>
-        <div id="feat-main" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
-          <div class="feat-table-wrap">
-            <table class="feat-table">
-              <thead><tr>
-                <th>Activity Name</th><th>Status</th>
-                <th style="text-align:center">Edit</th><th style="text-align:center">Del</th>
-              </tr></thead>
-              <tbody id="feat-tbody"><tr><td colspan="4" class="feat-empty">No features yet.</td></tr></tbody>
-            </table>
-          </div>
-        </div>
+        <div id="subtask-remarks-content" style="flex:1;overflow-y:auto;padding:14px 18px;"></div>
       </div>
     </div>
   </div>
@@ -1362,6 +1350,14 @@ body.readonly .icon-btn.tl-expand-details-btn{pointer-events:auto;opacity:1;}
 <div id="page-mytask" class="page">
   <div class="page-body">
     <h2 style="font-family:var(--font-head);font-size:20px;font-weight:800;margin:0 0 16px">My Task</h2>
+    <!-- Task 2 (Two Tabs): Active Tasks (Pending + In Progress) / Completed
+         Tasks (Completed) — tasks move between these automatically since
+         both just filter the same live task list by its current status,
+         nothing is stored per-tab. -->
+    <div class="pill-tabs" style="margin-bottom:14px">
+      <button class="pill-tab active" id="mytask-tab-active" onclick="switchMyTaskTab('active')">Active Tasks</button>
+      <button class="pill-tab" id="mytask-tab-completed" onclick="switchMyTaskTab('completed')">Completed Tasks</button>
+    </div>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
       <span style="font-size:13px;color:var(--muted);flex-shrink:0">Search :</span>
       <input type="text" id="mytask-search" oninput="renderMyTaskTable()" placeholder="Search tasks, employee no., member…"
@@ -1678,6 +1674,17 @@ body.readonly .icon-btn.tl-expand-details-btn{pointer-events:auto;opacity:1;}
     <div style="border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px;min-height:320px;background:var(--surface)">
       <div class="side-tab-panel active" id="ar-panel-1" style="padding:14px 18px">
         <div style="display:flex;align-items:center;justify-content:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:12px">
+          <!-- Task 1 (Asset Information — Project Filter): custom dropdown
+               (native <select> can't show two differently-sized lines per
+               option) — mirrors the existing Assigned Person dropdown's
+               button+panel pattern from the My Task page. Populated from
+               the same arAllPhases() (Type='Asset' Projects) already used
+               by the Workflow Progress tab's own Project selector. -->
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);position:relative" id="ar-project-filter-wrap">
+            Project:
+            <button type="button" id="ar-project-filter-btn" onclick="toggleArProjectDropdown()" style="padding:6px 10px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);cursor:pointer;min-width:150px;text-align:left">All</button>
+            <div id="ar-project-filter-dropdown" style="display:none;position:absolute;top:calc(100% + 4px);right:0;z-index:20;min-width:220px;max-height:280px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.25)"></div>
+          </label>
           <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)">
             Search:
             <input type="text" id="ar-search" placeholder="Search asset name…" oninput="renderAssetInformationTable()" style="padding:6px 10px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);width:200px">
@@ -2560,6 +2567,17 @@ create policy "public read/write (testing)" on b2_tracker_data
         <label>Program</label>
         <select id="field-move-program"></select>
       </div>
+      <!-- Task 1 (Task Type): Task (level 2) only, default 'General'.
+           Selecting 'Purchase Item' reveals the Quantity/Budget fields
+           below — same row, in addition to the existing condition where
+           the parent Project's own Type is 'Asset'. -->
+      <div class="field" id="field-task-type-wrap" style="display:none">
+        <label>Type</label>
+        <select id="field-task-type" onchange="updateTaskAssetFieldsVisibility()">
+          <option value="General">General</option>
+          <option value="Purchase Item">Purchase Item</option>
+        </select>
+      </div>
       <!-- Task 1 (Asset Task Fields): Quantity/Budget — Task (level 2) only,
            and only when the parent Project's Type = 'Asset'. Hidden entirely
            for every other Project Type, and for any other level. -->
@@ -2788,6 +2806,48 @@ create policy "public read/write (testing)" on b2_tracker_data
       <div id="completion-date-error" style="display:none;color:var(--red);font-size:11px"></div>
     </div>
     <div class="modal-foot"><button class="btn btn-ghost" onclick="closeCompletionDateModal()">Cancel</button><button class="btn btn-primary" onclick="confirmCompletionDate()">Confirm</button></div>
+  </div>
+</div>
+
+<!-- ACTIVITY MODAL (Task 1: Program-Project-Task-Sub Task-Activity) — a
+     dedicated, deliberately minimal modal for the new tree-level Activity
+     (level 4, child of Sub Task), separate from the existing multi-purpose
+     "modal" used for Program/Project/Task/Sub Task, and separate from the
+     legacy featuresMap-based Activity system (right-panel "Activity" tab),
+     which is left fully intact for now. -->
+<div class="modal-overlay" id="activity-modal" onclick="closeActivityModal(event)">
+  <div class="modal">
+    <div class="modal-head"><div><h2 id="activity-modal-title">Add Activity</h2><p>Changes will be logged to history</p></div><button class="modal-close" onclick="closeActivityModal()">✕</button></div>
+    <div class="modal-body">
+      <div class="field"><label>Activity Name</label><input type="text" id="field-activity-name" placeholder="Enter activity name…"></div>
+      <div class="field">
+        <label>Assigned To</label>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="openActivityMemberPicker()" style="margin-bottom:8px">👥 Pick from Team</button>
+        <div id="activity-picked-members" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+      </div>
+      <div class="field"><label>Due Date</label><input type="date" id="field-activity-date"></div>
+      <div class="field">
+        <label>Status</label>
+        <select id="field-activity-status" onchange="updateActivityCompletedDateState()">
+          <option value="todo">To Do</option>
+          <option value="inprogress">In Progress</option>
+          <option value="review">Review</option>
+          <option value="completed">Completed</option>
+        </select>
+      </div>
+      <!-- Task 1 (Activity Completed Date): only enabled once Status is
+           set to Completed — matches the same "disabled unless applicable"
+           convention already used elsewhere in this app (e.g. the Task
+           Ribbon's own auto-calculated Progress field). -->
+      <div class="field"><label>Completed Date</label><input type="date" id="field-activity-completed-date" disabled></div>
+    </div>
+    <div class="modal-foot" style="justify-content:space-between">
+      <button class="btn btn-danger" id="activity-modal-delete-btn" style="display:none" onclick="deleteActivityFromModal()">Delete Activity</button>
+      <div style="display:flex;gap:8px;margin-left:auto">
+        <button class="btn btn-ghost" onclick="closeActivityModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveActivityModal()">Save</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -12901,7 +12961,27 @@ function fhClearFilters(){
 // ══════════════════════════════════════════════════════
 function renderSprintBoard(){
   const q=(document.getElementById('sb-search').value||'').toLowerCase().trim();
-  const master=loadMasterFeats();
+  // Task 1 (Activity Board — New Data Source): Activities now come from the
+  // real Program tree (level 4, child of Sub Task — Program → Project →
+  // Task → Sub Task → Activity) instead of the legacy featuresMap/
+  // masterFeatures table, which is no longer read anywhere in this
+  // function. Collected once here (with each Activity's own ancestor
+  // chain precomputed), reused for filtering, column assignment, and
+  // card rendering below.
+  const _freshData=load();
+  const activities=[];
+  function _collectActivities(node,path){
+    (node.children||[]).forEach(child=>{
+      const lvl=child.level||0;
+      // Flattened copy of the real Activity node, plus its own precomputed
+      // ancestor chain (path[0] = Program name, the rest = Project/Task/
+      // Sub Task) — keeps every f.id/f.name/f.teamMembers/f.activityStatus
+      // usage below working exactly as before, on the real node's own data.
+      if(lvl===4){activities.push(Object.assign({},child,{path}));return;}
+      _collectActivities(child,path.concat([child.name]));
+    });
+  }
+  (_freshData.nodes||[]).forEach(program=>_collectActivities(program,[program.name]));
   const teams=loadTeams();
 
   // ── Task 3: Populate App/Project combo (idempotent — preserves selection) ──
@@ -12909,7 +12989,6 @@ function renderSprintBoard(){
   const _memSel=document.getElementById('sb-member-filter');
   if(_appSel){
     const _savedApp=_appSel.value;
-    const _freshData=load();
     const _rootNodes=(_freshData.nodes||[]).filter(n=>(n.level||0)===0);
     _appSel.innerHTML='<option value="">All Apps / Projects</option>';
     _rootNodes.forEach(n=>{
@@ -12973,144 +13052,55 @@ function renderSprintBoard(){
   }
   const _appNodeIds=_filterAppId?_collectDescendantIds(_filterAppId,[]):null;
 
-  // ── Sprint membership set ───────────────────────────────────────────────────
-  const _sprintLinkedIds=new Set(loadMtgFeats().map(r=>r.featureId));
-
   // ── Column classification ──────────────────────────
-  // Priority order:
-  // 1. Done             → reviewAction='done_pool'|'pass', OR completed Approval/done type
-  // 2. Pending Backlogs → backlogType=Dev AND reviewAction='pending_pool' (Skip–Pending Pool)
-  // 3. In Development   → backlogType=Dev AND reviewAction='test'  (Ready for Testing — tester not yet assigned)
-  //                       backlogType=Dev AND reviewAction='cf'     (Carry Forward → back into dev)
-  //                       backlogType=Dev AND reviewAction='dev_pool'
-  //                       backlogType=Dev AND status='inprogress'  AND no action (normal sprint path)
-  //                       backlogType=Dev AND sprint-linked         AND no action (pending-status edge case)
-  // 4. In Testing       → backlogType='Testing'|'Approval', OR reviewAction='approval'|'testing_pool'
-  // 5. Pending Backlogs → Dev features not in any sprint, or explicit skip
-
+  // Task 1 (Activity Board — New Data Source): Status alone decides the
+  // column now — every legacy backlogType/reviewAction/sprint-membership
+  // branch is gone, since Activities no longer carry those fields at all.
+  //   To Do        → 'pending'
+  //   In Progress  → 'dev'
+  //   Review       → 'testing' (column labeled "Pending Review")
+  //   Completed    → 'done'
   function assignCol(f){
-    // ── Task 1: Project Structure Status is now the primary source of truth ──
-    // If an activity's Status has been explicitly set via the Project Structure
-    // Activity table, it overrides the legacy backlogType/reviewAction inference below.
-    if(f.activityStatus){
-      if(f.activityStatus==='completed')return'done';
-      if(f.activityStatus==='inprogress')return'dev';
-      if(f.activityStatus==='pendingreview')return'testing';
-      if(f.activityStatus==='todo')return'pending';
-    }
-
-    const bt=f.backlogType||'Dev';
-    const ra=f.reviewAction||'';
-    const st=f.status||'backlog';
-
-    // ── 1. Done ─────────────────────────────────────
-    // Fix 1: f.done===true (set via toggleFeat or Action=Done) → Done column immediately.
-    // This must be the first check so manual Done in right panel syncs to Sprint Board in real-time.
-    if(f.done===true)return'done';
-    // Action=Done (done_pool), or legacy pass, or completed Approval/done type
-    if(ra==='done_pool'||ra==='pass'||(st==='completed'&&(bt==='Approval'||bt==='done')))return'done';
-
-    // ── 2. Pending Backlogs: Skip–Pending Pool ───────
-    // Dev + Action=Skip–Pending Pool → Pending Backlogs (highest priority exception)
-    if(bt==='Dev'&&ra==='pending_pool')return'pending';
-
-    // ── 3a. In Development: Ready for Testing ────────
-    // Dev OR Re-Dev complete + Action=Test → stays in dev with "Ready for Testing" badge,
-    // tester has not yet been assigned via a new Sprint Planning.
-    if((bt==='Dev'||bt==='Re-Dev')&&st==='completed'&&ra==='test')return'dev';
-
-    // ── 3b. In Development: Carry Forward ────────────
-    // Dev/Re-Dev + Action=CF → carries into next sprint cycle, stays In Development.
-    if((bt==='Dev'||bt==='Re-Dev')&&ra==='cf')return'dev';
-
-    // ── Case 12 fix: Testing + Dev Pool (Rework) → In Development ──
-    // BP=Testing, Action=dev_pool means the feature failed testing and is sent
-    // back for rework. It must appear in "In Development", not "In Testing".
-    // This intercept must come BEFORE the general bt==='Testing' → 'testing' rule.
-    if(bt==='Testing'&&ra==='dev_pool')return'dev';
-
-    // ── 4. In Testing ────────────────────────────────
-    // Feature assigned to tester via Sprint Planning (backlogType changed to Testing/Approval),
-    // or explicit testing/approval pool action.
-    if(ra==='approval'||ra==='testing_pool'||bt==='Testing'||bt==='Approval')return'testing';
-
-    // ── 3c. In Development: active sprint features ───
-    // Explicit dev pool action
-    if(ra==='dev_pool')return'dev';
-    // Normal path: status flipped to inprogress when added to sprint
-    if(bt==='Dev'&&st==='inprogress'&&ra==='')return'dev';
-    // Edge case: feature had status='pending' (not 'backlog') when added to sprint,
-    // so status was not flipped — but IS in a sprint → still show In Development
-    if(bt==='Dev'&&_sprintLinkedIds.has(f.id)&&ra==='')return'dev';
-
-    // ── 5. Pending Backlogs: unsprintered / skip ─────
-    if(bt==='Dev'&&(ra===''||ra==='skip'))return'pending';
-    return'pending'; // fallback
+    const s=f.activityStatus||'todo';
+    if(s==='completed')return'done';
+    if(s==='inprogress')return'dev';
+    if(s==='review')return'testing';
+    return'pending';
   }
 
   function memberName(mid){const m=teams.find(t=>t.id===mid);return m?m.name:null;}
+  // Task 1 (Activity Board — New Data Source): "assigned to" now reads
+  // directly from the Activity's own teamMembers — no dev-history lookup
+  // or legacy bridge table needed, since assignment is a first-class field
+  // on the node itself.
   function devName(f){
-    const hist=loadFeatHistory().filter(r=>r.feature_id===f.id&&r.backlog_type==='Dev');
-    if(hist.length){const mid=(hist[hist.length-1].assigned_to||[])[0];if(mid)return memberName(mid);}
-    const mid=(f.defaultAssignedTo||[])[0];return mid?memberName(mid):null;
+    const mid=(f.teamMembers||[])[0];return mid?memberName(mid):null;
   }
 
   const cols={pending:[],dev:[],testing:[],done:[]};
 
-  // ── Helper: get root app name for a feature (Task 3 — card label & search) ─
+  // Task 1 (Activity Board — New Data Source): Program/Project\Task\Sub Task
+  // now come straight from each Activity's own precomputed path (see
+  // _collectActivities above) — no submoduleId indirection or reload
+  // needed, since the Activity already IS the real tree node.
   function getAppName(f){
-    if(!f.submoduleId)return null;
-    const _fd=load();
-    function findRoot(id,nodes){
-      for(const n of nodes){
-        if(n.id===id)return n;
-        if(n.children){const r=findRoot(id,n.children);if(r)return r;}
-      }
-      return null;
-    }
-    function getRootAncestor(id,nodes,parent){
-      for(const n of nodes){
-        if(n.id===id)return parent||(n.level===0?n:null);
-        if(n.children){const r=getRootAncestor(id,n.children,n.level===0?n:parent);if(r)return r;}
-      }
-      return null;
-    }
-    const root=getRootAncestor(f.submoduleId,_fd.nodes||[],null);
-    return root?root.name:null;
+    return(f.path&&f.path.length)?f.path[0]:null;
   }
-  // Task 3 (Activity Board — associated path): resolves the Feature/
-  // Activity's full ancestry back to its Project (Project\Task\Sub Task),
-  // via the same submoduleId/moduleId reference already used everywhere
-  // else to relate a Feature back into Project Structure — no new data
-  // needed. Reloads a fresh copy of Project Structure via load(), matching
-  // getAppName()'s own defensive pattern just above — relying on the global
-  // data variable here was intermittently stale, which is why some cards
-  // resolved correctly and others silently didn't (including ones parented
-  // under a Sub Task).
   function getTaskPath(f){
-    const pid=f.submoduleId||f.moduleId;
-    if(!pid)return null;
-    const _fd=load();
-    const chain=[];
-    let cur=findNode(pid,_fd.nodes||[]);
-    while(cur&&(cur.level||0)>=1){ // stop at the Program (level 0) — path starts at Project
-      chain.unshift(cur.name);
-      cur=findParent(cur.id,_fd.nodes||[],null);
-    }
-    return chain.length?chain.join('\\'):null;
+    return(f.path&&f.path.length>1)?f.path.slice(1).join('\\'):null;
   }
 
   // ── Task 3: get all assigned member IDs for a feature ──────────────────────
+  // Task 1 (Activity Board — New Data Source): reads teamMembers directly —
+  // no legacy bridge table (loadMtgFeats) needed, since assignment is a
+  // first-class field on the Activity node itself.
   function getAssignedMemberIds(f){
-    const ids=new Set(f.defaultAssignedTo||[]);
-    // Also check bridge table entries for this feature
-    loadMtgFeats().filter(r=>r.featureId===f.id).forEach(r=>{(r.assignedTo||[]).forEach(id=>ids.add(id));});
-    return ids;
+    return new Set(f.teamMembers||[]);
   }
 
-  master.forEach(f=>{
+  activities.forEach(f=>{
     // ── Task 3: App/Project filter ────────────────────
-    if(_appNodeIds&&!_appNodeIds.has(f.submoduleId||0))return;
+    if(_appNodeIds&&!_appNodeIds.has(f.id))return;
     // ── Task 4: My Task / member filter ───────────────
     if(_filterMemberId&&!getAssignedMemberIds(f).has(_filterMemberId))return;
     // ── Global search — works across all apps (Task 3 search behavior) ────────
@@ -13131,11 +13121,9 @@ function renderSprintBoard(){
     el.title='Click for full details';
     el.onclick=()=>openTaskInfoModal(f.id);
 
-    // Task 5: "Ready for Testing" badge
-    const isRFT=(f.backlogType||'Dev')==='Dev'&&f.status==='completed'&&f.reviewAction==='test';
-    const rftBadge=isRFT
-      ?`<span title="Dev complete — awaiting tester assignment" style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:20px;background:rgba(245,166,35,0.15);border:1px solid rgba(245,166,35,0.4);color:#f5a623;font-size:10px;font-weight:600;white-space:nowrap;flex-shrink:0">🧪 Ready for Testing</span>`
-      :'';
+    // Task 1 (Activity Board — New Data Source): the legacy "Ready for
+    // Testing" badge (backlogType/status/reviewAction-based) is removed —
+    // those fields no longer exist on Activities at all.
     const devIcon=dev?`<span title="${eH(dev)}" style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:var(--muted)">👤 ${eH(dev)}</span>`:'';
     // Task 3: App/Project name shown on card for global search clarity
     const appName=getAppName(f);
@@ -13149,7 +13137,7 @@ function renderSprintBoard(){
     el.innerHTML=
       `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:4px;flex-wrap:wrap">
         <span style="font-weight:500;line-height:1.3;flex:1;min-width:0;word-break:break-word;white-space:normal">${eH(f.name)} ${taskNameLabel}</span>
-        <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;flex-shrink:0">${rftBadge}${devIcon}</div>
+        <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;flex-shrink:0">${devIcon}</div>
        </div>`+
       (appLabel?`<div>${appLabel}</div>`:'');
     return el;
@@ -13377,6 +13365,69 @@ function nodeTaskDelayInfo(taskNode){
   }
   return null;
 }
+// Task 2 (Sub Task Ribbon): mirrors nodeTaskRibbonParts exactly, one level
+// down — Activity (level 4) completion count/next-pending name, for a Sub
+// Task (level 3) row's own ribbon. Same style/structure as the Task Ribbon.
+function nodeSubtaskRibbonParts(subtaskNode){
+  const parts=[];
+  const activities=(subtaskNode.children||[]).filter(c=>(c.level||0)===4);
+  if(activities.length){
+    const completedCount=activities.filter(a=>calcProgress(a)===100).length;
+    parts.push(`${completedCount}/${activities.length}`);
+  }
+  const nextPending=activities.find(a=>calcProgress(a)!==100);
+  if(nextPending)parts.push(truncateRibbonName(nextPending.name));
+  return parts;
+}
+// Task 2 (Sub Task Ribbon — Delay Badge): mirrors nodeTaskDelayInfo exactly,
+// one level down — Sub Task's own End Date first, then the next pending
+// Activity's Due Date.
+function nodeSubtaskDelayInfo(subtaskNode){
+  const activities=(subtaskNode.children||[]).filter(c=>(c.level||0)===4);
+  const nextPending=activities.find(a=>calcProgress(a)!==100);
+  function daysLate(dateStr){
+    if(!dateStr)return 0;
+    const end=new Date(dateStr);
+    const today=new Date();
+    const endDay=new Date(end.getFullYear(),end.getMonth(),end.getDate());
+    const todayDay=new Date(today.getFullYear(),today.getMonth(),today.getDate());
+    return Math.round((todayDay-endDay)/86400000);
+  }
+  const subtaskLateDays=daysLate(subtaskNode.endDate);
+  if(subtaskNode.endDate&&subtaskLateDays>0){
+    return{level:'subtask',days:subtaskLateDays};
+  }
+  if(nextPending&&nextPending.activityDate){
+    const actLateDays=daysLate(nextPending.activityDate);
+    if(actLateDays>0)return{level:'activity',days:actLateDays};
+  }
+  return null;
+}
+const ACTIVITY_STATUS_LABEL={todo:'To Do',inprogress:'In Progress',review:'Review',completed:'Completed'};
+// Task 1 (Activity Ribbon): Due Date text for an Activity (level 4) row's
+// own ribbon — it has no children, so unlike the Task/Sub Task ribbons
+// there's no completion-count/next-pending segment. Status is rendered
+// separately as its own centered badge (see the lvl===4 render block),
+// not part of this joined text.
+function nodeActivityRibbonParts(activityNode){
+  const parts=[];
+  const fmt=d=>d?new Date(d).toLocaleDateString('en-GB',{day:'2-digit',month:'2-digit',year:'2-digit'}):'';
+  if(activityNode.activityDate)parts.push('Due '+fmt(activityNode.activityDate));
+  return parts;
+}
+// Task 1 (Activity Ribbon — Delay Badge): same day-late calculation as the
+// Task/Sub Task ribbons, applied to the Activity's own Due Date. A
+// completed Activity is never shown as overdue.
+function nodeActivityDelayInfo(activityNode){
+  if(activityNode.progress===100)return null;
+  if(!activityNode.activityDate)return null;
+  const end=new Date(activityNode.activityDate);
+  const today=new Date();
+  const endDay=new Date(end.getFullYear(),end.getMonth(),end.getDate());
+  const todayDay=new Date(today.getFullYear(),today.getMonth(),today.getDate());
+  const days=Math.round((todayDay-endDay)/86400000);
+  return days>0?{days}:null;
+}
 // Task 2 (Project Ribbon): Project (level 1) rows' ribbon text — Total
 // Tasks (completed/total immediate Task children) plus, only when the
 // Project's own End Date has passed, its total delay in days. No delay
@@ -13424,9 +13475,14 @@ function renderNode(node){
     toggleOpen(node,wrapper);selectNode(node.id);
   };
   // Task 1 (Right Panel Show/Hide): double-clicking any Project/Phase/Job/Task
-  // row opens the details panel if it's currently minimized.
+  // row opens the details panel if it's currently minimized. Task 2
+  // (Remarks Panel — Activity Exclusion): Activities (level 4) have no
+  // Remarks of their own — the panel's second tab now only shows content
+  // for Sub Task — so double-click no longer opens the side panel for
+  // them at all; only reveals it for every other level, unchanged.
   row.ondblclick=(e)=>{
     if(e.target.closest('.node-actions')||e.target.closest('.task-check'))return;
+    if(lvl===4)return;
     openSidePane();
   };
   const tog=document.createElement('div');
@@ -13437,14 +13493,21 @@ function renderNode(node){
   if(isTask){const chk=document.createElement('div');chk.className=`task-check ${prog===100?'done':''}`;chk.title='Toggle done';chk.onclick=(e)=>{e.stopPropagation();toggleDone(node);};row.appendChild(chk);}
   const lbl=document.createElement('div');lbl.className='node-label';
   // Task 1 (Qty Caption): "Nos/Qty" renamed to the friendlier "Qty" caption;
-  // the value itself stays highlighted in yellow as before.
-  // Task Fix (Task Ribbon — Qty Display): mirrors whatever Qty/Nos value is
-  // already saved on the node next to its own heading — no level
-  // restriction, no new field, no data structure change. The Edit modal
-  // is the only place that ever writes this value, so this simply reflects
-  // it back wherever it's actually present.
-  const hasNosQty=node.nosQty!==undefined&&node.nosQty!==null&&node.nosQty!=='';
-  lbl.innerHTML=eH(node.name)+(hasNosQty?` <span style="color:#facc15;font-weight:600">(Qty: ${eH(String(node.nosQty))})</span>`:'');
+  // the value itself stays highlighted in yellow as before. This "Qty:"
+  // caption is Project-row-only (unchanged) — the Task Ribbon's own Qty
+  // badge (below) intentionally has no caption, per requirement.
+  const hasNosQty=lvl===1&&node.nosQty!==undefined&&node.nosQty!==null&&node.nosQty!=='';
+  // Task Fix (Task Ribbon — Qty Display): mirrors node.qty next to a Task
+  // (level 2) row's own heading — no new field, no data structure change,
+  // logic unchanged (only shown once it's an actual quantity, >0; 0/empty
+  // shows nothing). Styled as an orange oval badge with black text — reuses
+  // the exact same .node-badge.badge-amber classes as the existing
+  // percentage indicator, so it matches that badge's shape/colors exactly
+  // in both themes, with no caption, just the bare number.
+  const hasTaskQty=lvl===2&&typeof node.qty==='number'&&node.qty>0;
+  const qtyBadge=hasNosQty?` <span style="color:#facc15;font-weight:600">(Qty: ${eH(String(node.nosQty))})</span>`
+    :hasTaskQty?` <span class="node-badge badge-amber">${eH(String(node.qty))}</span>`:'';
+  lbl.innerHTML=eH(node.name)+qtyBadge;
   row.appendChild(lbl);
   // Date display for Program (level 0) — unchanged from before.
   if(lvl===0&&(node.startDate||node.endDate)){
@@ -13509,11 +13572,85 @@ function renderNode(node){
       row.appendChild(taskInfoWrap);
     }
   }
+  // Task 2 (Sub Task Ribbon): same style/structure as the Task Ribbon
+  // above — Activity progress/next-pending text, dates, and a delay badge
+  // (red for the Sub Task's own delay, amber for its next Activity's Due
+  // Date) — see nodeSubtaskRibbonParts/nodeSubtaskDelayInfo.
+  if(lvl===3){
+    const subtaskInfoParts=[];
+    nodeSubtaskRibbonParts(node).forEach(p=>subtaskInfoParts.push(eH(p)));
+    const fmt3=d=>d?new Date(d).toLocaleDateString('en-GB',{day:'2-digit',month:'2-digit',year:'2-digit'}):'—';
+    if(node.startDate||node.endDate)subtaskInfoParts.push(`${fmt3(node.startDate)} → ${fmt3(node.endDate)}`);
+    const subtaskDelayInfo=nodeSubtaskDelayInfo(node);
+    const subtaskInfoWrap=document.createElement('div');
+    subtaskInfoWrap.style.cssText='display:flex;align-items:center;gap:6px;margin-right:8px;flex-shrink:0;';
+    if(subtaskInfoParts.length){
+      const subtaskInfoLbl=document.createElement('span');
+      subtaskInfoLbl.style.cssText='font-size:10px;color:var(--lvl2-info-color);white-space:nowrap;';
+      subtaskInfoLbl.textContent=subtaskInfoParts.join(' | ');
+      subtaskInfoWrap.appendChild(subtaskInfoLbl);
+    }
+    if(subtaskDelayInfo){
+      const subtaskDelayBadge=document.createElement('span');
+      subtaskDelayBadge.className=`node-badge ${subtaskDelayInfo.level==='subtask'?'badge-red':'badge-amber'}`;
+      subtaskDelayBadge.textContent=`Delay (${subtaskDelayInfo.days}d)`;
+      subtaskInfoWrap.appendChild(subtaskDelayBadge);
+    }
+    // Task 1 (Remarks Panel): a dedicated button on the Sub Task Ribbon
+    // that jumps straight to the Remarks tab of the right-side panel,
+    // instead of relying only on double-click (which just opens whichever
+    // tab was last active).
+    const remarksBtn=document.createElement('button');
+    remarksBtn.className='icon-btn';
+    remarksBtn.title='View Remarks';
+    remarksBtn.textContent='📝';
+    remarksBtn.onclick=(e)=>{e.stopPropagation();openSubtaskRemarksPanel(node.id);};
+    subtaskInfoWrap.appendChild(remarksBtn);
+    row.appendChild(subtaskInfoWrap);
+  }
+  // Task 1 (Activity Ribbon): Due Date text, a centered fixed-width Status
+  // badge, and a "Due (Xd)" badge once the current date is past the
+  // Activity's own Due Date — same delay-calculation logic as the Task
+  // Ribbon, applied to this Activity's own date instead of a descendant's.
+  if(lvl===4){
+    const activityInfoParts=nodeActivityRibbonParts(node).map(p=>eH(p));
+    const activityDelayInfo=nodeActivityDelayInfo(node);
+    const activityInfoWrap=document.createElement('div');
+    activityInfoWrap.style.cssText='display:flex;align-items:center;gap:6px;margin-right:8px;flex-shrink:0;';
+    if(activityInfoParts.length){
+      const activityInfoLbl=document.createElement('span');
+      activityInfoLbl.style.cssText='font-size:10px;color:var(--lvl2-info-color);white-space:nowrap;';
+      activityInfoLbl.textContent=activityInfoParts.join(' | ');
+      activityInfoWrap.appendChild(activityInfoLbl);
+    }
+    // Task 1 (Status Display): Status shown as its own fixed-width, bold,
+    // orange oval badge, centered within the ribbon's info cluster — i.e.
+    // between the Due Date text and the delay badge — rather than folded
+    // into the plain text list. Width is fixed wide enough that every
+    // status ("In Progress", "Completed", etc.) fits on one line.
+    const statusBadge=document.createElement('span');
+    statusBadge.className='node-badge badge-amber';
+    statusBadge.style.cssText='width:86px;text-align:center;font-weight:700;';
+    statusBadge.textContent=ACTIVITY_STATUS_LABEL[node.activityStatus]||'To Do';
+    activityInfoWrap.appendChild(statusBadge);
+    if(activityDelayInfo){
+      const activityDelayBadge=document.createElement('span');
+      activityDelayBadge.className='node-badge badge-red';
+      activityDelayBadge.textContent=`Due (${activityDelayInfo.days}d)`;
+      activityInfoWrap.appendChild(activityDelayBadge);
+    }
+    row.appendChild(activityInfoWrap);
+  }
   if(!isTask){const pb=document.createElement('div');pb.className='node-progress-bar';pb.innerHTML=`<div class="node-progress-fill" style="width:${prog}%;background:${progressColor(prog)}"></div>`;row.appendChild(pb);}
   const badge=document.createElement('div');badge.className=`node-badge ${badgeClass(prog)}`;badge.textContent=prog+'%';row.appendChild(badge);
   const acts=document.createElement('div');acts.className='node-actions';
   if(lvl<3){const ab=document.createElement('button');ab.className='icon-btn';ab.title='Add child';ab.textContent='+';ab.onclick=(e)=>{e.stopPropagation();openAddModal(node.id,lvl+1);};acts.appendChild(ab);}
-  const eb=document.createElement('button');eb.className='icon-btn';eb.title='Edit';eb.textContent='✎';eb.onclick=(e)=>{e.stopPropagation();openEditModal(node.id);};acts.appendChild(eb);
+  // Task 1 (Program-Project-Task-Sub Task-Activity): Sub Task (level 3)
+  // rows get their own "+" button, opening the new dedicated Activity
+  // Modal instead of the generic openAddModal — Activity (level 4) has
+  // its own, deliberately smaller field set (Name/Assigned To/Date/Status).
+  if(lvl===3){const ab=document.createElement('button');ab.className='icon-btn';ab.title='Add Activity';ab.textContent='+';ab.onclick=(e)=>{e.stopPropagation();openActivityModal(node.id);};acts.appendChild(ab);}
+  const eb=document.createElement('button');eb.className='icon-btn';eb.title='Edit';eb.textContent='✎';eb.onclick=(e)=>{e.stopPropagation();lvl===4?openActivityEditModal(node.id):openEditModal(node.id);};acts.appendChild(eb);
   // Delete moved into the Edit modal (with cascading-delete confirmation) — no longer available directly on the tree row.
   row.appendChild(acts);wrapper.appendChild(row);
   if(hasChildren){
@@ -13532,9 +13669,15 @@ function renderFlat(nodes,root,depth){
     const row=document.createElement('div');
     row.style.cssText=`display:flex;align-items:center;gap:10px;padding:8px 12px;margin-left:${depth*20}px;background:var(--surface2);border-radius:7px;margin-bottom:4px;cursor:pointer;border:1px solid var(--border);`;
     // Task Fix (Task Ribbon — Qty Display): mirrors renderNode()'s same
-    // level-agnostic Qty read — see that function for the reasoning.
-    const hasNosQty=n.nosQty!==undefined&&n.nosQty!==null&&n.nosQty!=='';
-    const nameLabel=hasNosQty?`${eH(n.name)} <span style="color:#facc15;font-weight:600">(Qty: ${eH(String(n.nosQty))})</span>`:eH(n.name);
+    // per-level Qty read — see that function for the reasoning. Project
+    // row keeps its "Qty:" caption (unchanged); Task row's badge has no
+    // caption, per requirement.
+    const nLvl=n.level||0;
+    const hasNosQty=nLvl===1&&n.nosQty!==undefined&&n.nosQty!==null&&n.nosQty!=='';
+    const hasTaskQty=nLvl===2&&typeof n.qty==='number'&&n.qty>0;
+    const qtyBadge=hasNosQty?` <span style="color:#facc15;font-weight:600">(Qty: ${eH(String(n.nosQty))})</span>`
+      :hasTaskQty?` <span style="color:#facc15;font-weight:600">(${eH(String(n.qty))})</span>`:'';
+    const nameLabel=`${eH(n.name)}${qtyBadge}`;
     row.innerHTML=`<div class="dot" style="background:${progressColor(prog)}"></div><span style="flex:1;font-size:13px">${nameLabel}</span><div class="node-progress-bar" style="width:70px"><div class="node-progress-fill" style="width:${prog}%;background:${progressColor(prog)}"></div></div><span style="font-family:var(--font-head);font-size:13px;font-weight:700;color:${progressColor(prog)};width:36px;text-align:right">${prog}%</span>`;
     row.onclick=()=>selectNode(n.id);root.appendChild(row);
     if(n.children&&n.children.length)renderFlat(n.children,root,depth+1);
@@ -13564,6 +13707,11 @@ function toggleOpen(node,wrapper){
 function toggleDone(node){
   if(!canEdit())return;
   node.progress=node.progress===100?0:100;
+  // Task 1 (Program-Project-Task-Sub Task-Activity): keep an Activity's
+  // explicit Status field in sync with its checkbox — otherwise re-opening
+  // the Activity Modal after toggling the checkbox would show a stale
+  // Status that no longer matches the row's own progress/badge.
+  if((node.level||0)===4)node.activityStatus=node.progress===100?'completed':'todo';
   node.history.push({ts:new Date().toISOString(),progress:node.progress,note:node.progress===100?'Marked as done':'Marked as incomplete'});
   save();render();
   toast(node.name+' '+(node.progress===100?'✓ Done':'reset'));
@@ -13646,9 +13794,10 @@ function selectNode(id){
   const featTab=document.getElementById('tab-features');
   const featPanel=document.getElementById('panel-features');
   if(_lvl===2||_lvl===3){
-    // Show Activity tab for Job (level 2) and Task (level 3)
+    // Show Remarks tab for Job (level 2) and Task (level 3) — renderSubtaskRemarks()
+    // itself shows the right message/content depending on which one it actually is.
     if(featTab)featTab.style.display='';
-    if(document.getElementById('panel-features').classList.contains('active'))renderFeatures();
+    if(document.getElementById('panel-features').classList.contains('active'))renderSubtaskRemarks();
   } else {
     // Project (0) / Phase (1): hide Activity tab, force Details view
     if(featTab)featTab.style.display='none';
@@ -13669,8 +13818,11 @@ function renderDetail(id){
   const circ=Math.PI*2*22;const offset=circ-(prog/100)*circ;
   ringBlock.innerHTML=`<div class="ring-wrap"><div class="ring"><svg width="58" height="58" viewBox="0 0 58 58"><circle class="track" cx="29" cy="29" r="22" fill="none" stroke-width="5"/><circle cx="29" cy="29" r="22" fill="none" stroke="${progressColor(prog)}" stroke-width="5" stroke-dasharray="${circ}" stroke-dashoffset="${offset}" stroke-linecap="round" style="transition:stroke-dashoffset .5s"/></svg><div class="ring-text">${prog}%</div></div><div><div style="font-family:var(--font-head);font-size:14px;font-weight:700">${eH(node.name)}</div><div style="font-size:12px;color:var(--muted);margin-top:2px">Level ${node.level||0} · ${node.children&&node.children.length?node.children.length+' children':'leaf task'}</div></div></div>`;
   c.appendChild(ringBlock);
-  // Task 1: schedule (and budget) info for Project (lvl0) and Phase (lvl1)
-  if((node.level||0)<=1&&(node.startDate||node.endDate||node.budget)){
+  // Task 1: schedule (and budget) info for Project (lvl0) and Phase (lvl1).
+  // Task 1 (Subtask Details Tab): extended to also include Sub Task (level
+  // 3) — its own Add/Edit modal already has Start/End Date fields, so the
+  // read-only Details tab should mirror that.
+  if(((node.level||0)<=1||(node.level||0)===3)&&(node.startDate||node.endDate||node.budget)){
     const fmt=d=>d?new Date(d).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}):'—';
     const schedBlock=document.createElement('div');schedBlock.className='detail-block';
     let schedHtml=`<div class="detail-block-title">Schedule</div><div style="font-size:13px;display:flex;flex-direction:column;gap:3px">
@@ -13681,23 +13833,54 @@ function renderDetail(id){
     schedBlock.innerHTML=schedHtml;
     c.appendChild(schedBlock);
   }
-  // persons + team members
+  // persons + team members. Task 1 (Details Tab Consistency): for Sub
+  // Task (level 3) this generic block is skipped — a dedicated,
+  // consistently-always-shown "Responsible Team" block is rendered below
+  // instead, alongside Milestone/System Task/Dependencies, so it doesn't
+  // just silently disappear when nobody's assigned yet.
   const allPersons=[...(node.persons?node.persons.split(',').map(p=>p.trim()).filter(Boolean):[])];
   const teams=loadTeams();
   const assignedTeam=(node.teamMembers||[]).map(id=>teams.find(m=>m.id===id)).filter(Boolean);
-  if(assignedTeam.length){
-    const pb=document.createElement('div');pb.className='detail-block';
-    pb.innerHTML=`<div class="detail-block-title">Assigned Team</div><div class="tag-list">${assignedTeam.map(m=>{const av=m.photo?`<img src="${m.photo}" alt="" style="width:18px;height:18px;border-radius:50%;object-fit:cover;margin-right:3px">`:'👤 ';return`<div class="tag">${av}${eH(m.name)}</div>`;}).join('')}</div>`;
-    c.appendChild(pb);
-  } else if(allPersons.length){
-    const pb=document.createElement('div');pb.className='detail-block';
-    pb.innerHTML=`<div class="detail-block-title">Responsible</div><div class="tag-list">${allPersons.map(p=>`<div class="tag">👤 ${eH(p)}</div>`).join('')}</div>`;
-    c.appendChild(pb);
+  if((node.level||0)!==3){
+    if(assignedTeam.length){
+      const pb=document.createElement('div');pb.className='detail-block';
+      pb.innerHTML=`<div class="detail-block-title">Assigned Team</div><div class="tag-list">${assignedTeam.map(m=>{const av=m.photo?`<img src="${m.photo}" alt="" style="width:18px;height:18px;border-radius:50%;object-fit:cover;margin-right:3px">`:'👤 ';return`<div class="tag">${av}${eH(m.name)}</div>`;}).join('')}</div>`;
+      c.appendChild(pb);
+    } else if(allPersons.length){
+      const pb=document.createElement('div');pb.className='detail-block';
+      pb.innerHTML=`<div class="detail-block-title">Responsible</div><div class="tag-list">${allPersons.map(p=>`<div class="tag">👤 ${eH(p)}</div>`).join('')}</div>`;
+      c.appendChild(pb);
+    }
   }
-  // remarks
-  const rb=document.createElement('div');rb.className='detail-block';
-  rb.innerHTML=`<div class="detail-block-title">Remarks</div><div class="remarks-display">${node.remarks||`<span style="color:var(--muted2);font-style:italic">No remarks yet.</span>`}</div>`;
-  c.appendChild(rb);
+  // Task 1 (Subtask Details Tab): the remaining Sub Task-only modal
+  // fields — Responsible Team, Milestone, System Task, Dependencies —
+  // shown read-only here, mirroring exactly what the Add/Edit Subtask
+  // modal offers (Remarks is deliberately excluded — it now lives in its
+  // own Remarks tab). Each always renders a block, with a "—" placeholder
+  // when unset, for consistency with Milestone's existing Yes/No pattern.
+  if((node.level||0)===3){
+    const rtBlock=document.createElement('div');rtBlock.className='detail-block';
+    rtBlock.innerHTML=`<div class="detail-block-title">Responsible Team</div>${assignedTeam.length?`<div class="tag-list">${assignedTeam.map(m=>{const av=m.photo?`<img src="${m.photo}" alt="" style="width:18px;height:18px;border-radius:50%;object-fit:cover;margin-right:3px">`:'👤 ';return`<div class="tag">${av}${eH(m.name)}</div>`;}).join('')}</div>`:'<div style="font-size:13px;color:var(--muted2)">—</div>'}`;
+    c.appendChild(rtBlock);
+    const msBlock=document.createElement('div');msBlock.className='detail-block';
+    msBlock.innerHTML=`<div class="detail-block-title">Milestone</div><div style="font-size:13px">${node.isMilestone?'✓ Yes':'No'}</div>`;
+    c.appendChild(msBlock);
+    const sysTask=node.systemTaskCode?SYSTEM_TASK_LIBRARY.find(t=>t.code===node.systemTaskCode):null;
+    const stBlock=document.createElement('div');stBlock.className='detail-block';
+    stBlock.innerHTML=`<div class="detail-block-title">System Task</div><div style="font-size:13px${sysTask?'':';color:var(--muted2)'}">${sysTask?eH(sysTask.name):'—'}</div>`;
+    c.appendChild(stBlock);
+    const depNames=(node.dependencies||[]).map(depId=>{const d=findNode(depId,data.nodes);return d?d.name:null;}).filter(Boolean);
+    const depBlock=document.createElement('div');depBlock.className='detail-block';
+    depBlock.innerHTML=`<div class="detail-block-title">Dependencies</div>${depNames.length?`<div class="tag-list">${depNames.map(n=>`<div class="tag">${eH(n)}</div>`).join('')}</div>`:'<div style="font-size:13px;color:var(--muted2)">—</div>'}`;
+    c.appendChild(depBlock);
+  }
+  // remarks — shown for every level except Sub Task (level 3), which now
+  // has its own dedicated Remarks tab instead.
+  if((node.level||0)!==3){
+    const rb=document.createElement('div');rb.className='detail-block';
+    rb.innerHTML=`<div class="detail-block-title">Remarks</div><div class="remarks-display">${node.remarks||`<span style="color:var(--muted2);font-style:italic">No remarks yet.</span>`}</div>`;
+    c.appendChild(rb);
+  }
   // history
   if(node.history&&node.history.length){
     const hb=document.createElement('div');hb.className='detail-block';
@@ -13758,47 +13941,28 @@ function openActivityDetailsModal(){
 function closeActivityDetailsModal(e){if(e&&e.target!==document.getElementById('activity-details-modal'))return;document.getElementById('activity-details-modal').classList.remove('open');}
 
 // Task 3: Task Board — "Task Information" modal, full details without truncation
+// Task 1 (Activity Board — New Data Source): looks up the real tree
+// Activity node directly (findNode) instead of the legacy masterFeatures
+// table — no other module's data is touched. Assigned-to and status now
+// read straight from the node's own teamMembers/activityStatus fields;
+// the Sprint Meeting bridge section of the old Meeting Review block is
+// removed (that bridge is legacy-only and Activities no longer link into
+// it), but the Meeting Management name-match section is kept — it's a
+// generic, still-meaningful lookup that doesn't depend on any legacy field.
 function openTaskInfoModal(id){
-  const master=loadMasterFeats();
-  const f=master.find(m=>m.id===id);
-  if(!f){toast('Task not found','error');return;}
+  const f=findNode(id,data.nodes);
+  if(!f||(f.level||0)!==4){toast('Task not found','error');return;}
   const teams=loadTeams();
   const memberName=mid=>{const m=teams.find(t=>t.id===mid);return m?m.name:null;};
-  // Resolve root App/Project ancestor for this task's submodule
-  let appName=null;
-  if(f.submoduleId){
-    function getRootAncestor(nid,nodes,parent){
-      for(const n of nodes){
-        if(n.id===nid)return parent||(n.level===0?n:null);
-        if(n.children){const r=getRootAncestor(nid,n.children,n.level===0?n:parent);if(r)return r;}
-      }
-      return null;
-    }
-    const root=getRootAncestor(f.submoduleId,data.nodes,null);
-    appName=root?root.name:null;
-  }
-  const assignedIds=new Set(f.defaultAssignedTo||[]);
-  loadMtgFeats().filter(r=>r.featureId===f.id).forEach(r=>(r.assignedTo||[]).forEach(mid=>assignedIds.add(mid)));
-  const assignedNames=[...assignedIds].map(memberName).filter(Boolean);
-  const st=f.activityStatus||(f.done?'completed':'todo');
-  const statusLabel={todo:'To Do',inprogress:'In Progress',pendingreview:'Pending Review',completed:'Completed'}[st]||'To Do';
+  const parentProj=depFindProjectAncestor(id);
+  const program=parentProj?findParent(parentProj.id,data.nodes,null):null;
+  const appName=program?program.name:null;
+  const assignedNames=(f.teamMembers||[]).map(memberName).filter(Boolean);
+  const statusLabel=ACTIVITY_STATUS_LABEL[f.activityStatus]||'To Do';
 
-  // Task 2: Meeting Review — read-only summary of Sprint Meeting and Meeting Management
-  // records that reference this task/activity, wherever such links exist.
+  // Task 2: Meeting Review — read-only summary of Meeting Management
+  // records that reference this Activity by name.
   let meetingReviewHtml='';
-  // (a) Sprint Meeting ↔ Activity bridge records
-  const sprintLinks=loadMtgFeats().filter(r=>r.featureId===f.id);
-  const sprintMeetings=loadMeetings();
-  sprintLinks.forEach(link=>{
-    const mtg=sprintMeetings.find(m=>m.id===link.meetingId);
-    const mtgLabel=mtg?(mtg.type||'Sprint Meeting')+(mtg.date?' — '+formatDateShort(mtg.date):''):'Sprint Meeting';
-    meetingReviewHtml+=`<div style="padding:8px 0;border-bottom:1px dashed var(--border)">
-      <div style="font-size:12px;font-weight:700;color:var(--accent)">${eH(mtgLabel)}</div>
-      ${link.status?`<div style="font-size:12px;margin-top:2px"><span style="color:var(--muted)">Status:</span> ${eH(link.status)}</div>`:''}
-      ${link.remarks?`<div style="font-size:12px;margin-top:2px"><span style="color:var(--muted)">Remarks:</span> ${eH(link.remarks)}</div>`:''}
-    </div>`;
-  });
-  // (b) Meeting Management — Meeting Details rows whose Item text references this task/activity by name
   const momMeetings=loadMom();
   const nameLower=(f.name||'').toLowerCase();
   momMeetings.forEach(m=>{
@@ -13820,7 +13984,6 @@ function openTaskInfoModal(id){
   document.getElementById('task-info-title').textContent=f.name;
   document.getElementById('task-info-body').innerHTML=`
     <div class="detail-block"><div class="detail-block-title">Status</div><div style="font-size:13px;font-weight:700;color:var(--accent)">${eH(statusLabel)}</div></div>
-    <div class="detail-block"><div class="detail-block-title">Remarks / Notes</div><div class="remarks-display">${f.remarks?eH(f.remarks):'<span style="color:var(--muted2);font-style:italic">No remarks yet.</span>'}</div></div>
     ${appName?`<div class="detail-block"><div class="detail-block-title">Project</div><div style="font-size:13px">📁 ${eH(appName)}</div></div>`:''}
     ${assignedNames.length?`<div class="detail-block"><div class="detail-block-title">Assigned To</div><div class="tag-list">${assignedNames.map(n=>`<div class="tag">👤 ${eH(n)}</div>`).join('')}</div></div>`:''}
     <div class="detail-block"><div class="detail-block-title">Meeting Review</div>${meetingReviewHtml}</div>
@@ -13913,7 +14076,7 @@ function updateStats(){
 // SIDE TABS + FEATURES
 // ══════════════════════════════════════════════════════
 function switchSideTab(tab){
-  // Guard: Activity tab only allowed for Job (level 2) and Task (level 3)
+  // Guard: Remarks tab only allowed for Job (level 2) and Task (level 3)
   if(tab==='features'&&selectedId){
     const _n=findNode(selectedId,data.nodes);
     const _lvl=_n?(_n.level||0):0;
@@ -13924,7 +14087,7 @@ function switchSideTab(tab){
   document.getElementById('panel-details').classList.toggle('active',tab==='details');
   document.getElementById('panel-features').classList.toggle('active',tab==='features');
   document.getElementById('side-edit-btn').style.display=tab==='details'&&selectedId?'inline-flex':'none';
-  if(tab==='features')renderFeatures();
+  if(tab==='features')renderSubtaskRemarks();
 }
 
 // ══════════════════════════════════════════════════════
@@ -14119,6 +14282,52 @@ function renderAssetStatsBar(){
     <span>Delivery: <b>${delivery}</b></span>
     <span>Overall Readiness: <b>${overallReadiness}%</b></span>`;
 }
+// Task 1 (Asset Information — Project Filter): single-select dropdown,
+// default 'all'. Custom-built (button + toggle panel), same interaction
+// pattern as the My Task page's Assigned Person dropdown, since a native
+// <select> can't render two differently-sized lines per option.
+let arProjectFilterSelected='all';
+function toggleArProjectDropdown(){
+  const dd=document.getElementById('ar-project-filter-dropdown');
+  if(!dd)return;
+  if(dd.style.display==='block'){dd.style.display='none';return;}
+  renderArProjectDropdown();
+  dd.style.display='block';
+}
+function updateArProjectFilterBtnLabel(){
+  const btn=document.getElementById('ar-project-filter-btn');
+  if(!btn)return;
+  if(arProjectFilterSelected==='all'){btn.textContent='All';return;}
+  const proj=findNode(parseInt(arProjectFilterSelected),data.nodes);
+  btn.textContent=proj?proj.name:'All';
+}
+function renderArProjectDropdown(){
+  const dd=document.getElementById('ar-project-filter-dropdown');
+  if(!dd)return;
+  const assets=arAllPhases(); // Type='Asset' Projects only, same source as the Asset Information table itself
+  const rowStyle='padding:8px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--border)';
+  let html=`<div style="${rowStyle}${arProjectFilterSelected==='all'?';background:rgba(0,198,255,.08)':''}" onclick="arProjectFilterPick('all')"><div style="font-weight:600">All</div></div>`;
+  html+=assets.map(p=>{
+    const program=findParent(p.id,data.nodes,null);
+    const isSel=arProjectFilterSelected===String(p.id);
+    return `<div style="${rowStyle}${isSel?';background:rgba(0,198,255,.08)':''}" onclick="arProjectFilterPick('${p.id}')">
+      <div style="font-weight:600">${eH(p.name)}</div>
+      <div style="font-size:11px;color:var(--muted2);margin-top:2px">${eH(program?program.name:'')}</div>
+    </div>`;
+  }).join('');
+  dd.innerHTML=html||'<div style="padding:12px;font-size:12px;color:var(--muted2);text-align:center">No Asset-type Projects yet.</div>';
+}
+function arProjectFilterPick(val){
+  arProjectFilterSelected=val;
+  document.getElementById('ar-project-filter-dropdown').style.display='none';
+  updateArProjectFilterBtnLabel();
+  renderAssetInformationTable();
+}
+document.addEventListener('click',function(e){
+  const wrap=document.getElementById('ar-project-filter-wrap');
+  const dd=document.getElementById('ar-project-filter-dropdown');
+  if(dd&&dd.style.display==='block'&&wrap&&!wrap.contains(e.target))dd.style.display='none';
+});
 function renderAssetInformationTable(){
   const container=document.getElementById('ar-table-container');
   if(!container)return;
@@ -14131,10 +14340,14 @@ function renderAssetInformationTable(){
   // (level 3) are excluded. The "Asset Name" column shows each Task's own
   // name.
   let rows=arAllAssetTaskRows();
+  // Task 1 (Asset Information — Project Filter): 'all' (default) shows
+  // every Asset-type Project's rows, unchanged; a specific selection
+  // narrows to just that Project.
+  if(arProjectFilterSelected!=='all')rows=rows.filter(r=>r.phase.id===parseInt(arProjectFilterSelected));
   if(q)rows=rows.filter(r=>(r.task.name||'').toLowerCase().includes(q));
   if(dateFilter)rows=rows.filter(r=>r.task.startDate===dateFilter||r.task.endDate===dateFilter||r.phase.startDate===dateFilter||r.phase.endDate===dateFilter);
   if(!rows.length){
-    container.innerHTML='<div class="detail-empty"><div class="icon">🛠️</div><p>No assets (Tasks)'+(q||dateFilter?' matching your filters.':' found yet — add a Task under a Project marked Type = Asset in Project Structure to see it here.')+'</p></div>';
+    container.innerHTML='<div class="detail-empty"><div class="icon">🛠️</div><p>No assets (Tasks)'+(q||dateFilter||arProjectFilterSelected!=='all'?' matching your filters.':' found yet — add a Task under a Project marked Type = Asset in Project Structure to see it here.')+'</p></div>';
     return;
   }
   const fmt=d=>d?new Date(d).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'}):'—';
@@ -15454,6 +15667,7 @@ function confirmMemberPick(){
   if(_pickerTarget==='module')renderModuleMemberChips();
   else if(_pickerTarget==='feat')renderFeatMemberChips();
   else if(_pickerTarget==='backlog')renderBlMemberChips();
+  else if(_pickerTarget==='activity')renderActivityMemberChips();
 }
 
 // Module member picker
@@ -15476,6 +15690,125 @@ function renderModuleMemberChips(){
     chip.innerHTML=`${eH(m.name)} (${eH(m.code)}) <span class="remove" onclick="pickedModuleMembers=pickedModuleMembers.filter(x=>x!==${id});renderModuleMemberChips()">✕</span>`;
     div.appendChild(chip);
   });
+}
+
+// ══════════════════════════════════════════════════════
+// ACTIVITY MODAL (Task 1: Program-Project-Task-Sub Task-Activity) — a
+// dedicated add/edit flow for the new tree-level Activity (level 4, child
+// of Sub Task, level 3). Deliberately separate from the main multi-purpose
+// modal (openAddModal/openEditModal) and from the legacy featuresMap-based
+// Activity system, which is untouched. Saves/edits a real tree node — so
+// it automatically inherits the tree's existing sync (Supabase realtime,
+// tombstones, id de-duplication) and delete flow (askDelete/confirmDelete)
+// for free, instead of the separate parallel stores the legacy system
+// relies on.
+// ══════════════════════════════════════════════════════
+let activityModalMode=null,activityModalParentId=null,activityModalEditId=null;
+let pickedActivityMembers=[];
+function renderActivityMemberChips(){
+  const div=document.getElementById('activity-picked-members');
+  if(!div)return;
+  const teams=loadTeams();
+  div.innerHTML='';
+  pickedActivityMembers.forEach(id=>{
+    const m=teams.find(t=>t.id===id);if(!m)return;
+    const chip=document.createElement('div');chip.className='member-chip';
+    chip.innerHTML=`${eH(m.name)} (${eH(m.code)}) <span class="remove" onclick="pickedActivityMembers=pickedActivityMembers.filter(x=>x!==${id});renderActivityMemberChips()">✕</span>`;
+    div.appendChild(chip);
+  });
+}
+function openActivityMemberPicker(){
+  openMemberPickerCore(pickedActivityMembers,(selected)=>{
+    pickedActivityMembers=selected;
+    renderActivityMemberChips();
+  },'activity');
+}
+function openActivityModal(parentId){
+  if(!canEdit())return;
+  if(!canEditThisProjectScope(parentId,'edit')){toast('You do not have Edit permission for this Project','error');return;}
+  activityModalMode='add';activityModalParentId=parentId;activityModalEditId=null;
+  pickedActivityMembers=[];renderActivityMemberChips();
+  document.getElementById('activity-modal-title').textContent='Add Activity';
+  document.getElementById('activity-modal-delete-btn').style.display='none';
+  document.getElementById('field-activity-name').value='';
+  document.getElementById('field-activity-date').value='';
+  document.getElementById('field-activity-status').value='todo';
+  document.getElementById('field-activity-completed-date').value='';
+  updateActivityCompletedDateState();
+  document.getElementById('activity-modal').classList.add('open');
+  setTimeout(()=>document.getElementById('field-activity-name').focus(),100);
+}
+function openActivityEditModal(id){
+  if(!canEdit())return;
+  const node=findNode(id,data.nodes);if(!node)return;
+  if(!canEditThisProjectScope(id,'edit')){toast('You do not have Edit permission for this Project','error');return;}
+  activityModalMode='edit';activityModalEditId=id;activityModalParentId=null;
+  pickedActivityMembers=[...(node.teamMembers||[])];renderActivityMemberChips();
+  document.getElementById('activity-modal-title').textContent='Edit Activity: '+node.name;
+  const delBtn=document.getElementById('activity-modal-delete-btn');
+  delBtn.style.display=canEditThisProjectScope(id,'delete')?'inline-flex':'none';
+  document.getElementById('field-activity-name').value=node.name||'';
+  document.getElementById('field-activity-date').value=node.activityDate||'';
+  document.getElementById('field-activity-status').value=node.activityStatus||'todo';
+  document.getElementById('field-activity-completed-date').value=node.completedDate||'';
+  updateActivityCompletedDateState();
+  document.getElementById('activity-modal').classList.add('open');
+  setTimeout(()=>document.getElementById('field-activity-name').focus(),100);
+}
+function closeActivityModal(e){
+  if(e&&e.target!==document.getElementById('activity-modal'))return;
+  document.getElementById('activity-modal').classList.remove('open');
+}
+// Task 1 (Activity Completed Date): enabled only while Status is
+// Completed — mirrors whatever the Status field currently says, called on
+// modal open and every time Status changes. Never touches the field's
+// stored value, only whether it's editable.
+function updateActivityCompletedDateState(){
+  const status=document.getElementById('field-activity-status').value;
+  const dateInput=document.getElementById('field-activity-completed-date');
+  dateInput.disabled=(status!=='completed');
+}
+// Status→progress mapping: only 'completed' counts as done (matches
+// calcProgress()'s existing lvl===4 binary rule of node.progress===100);
+// the others are purely visual gradations for the progress bar/badge.
+const ACTIVITY_STATUS_PROGRESS={todo:0,inprogress:33,review:66,completed:100};
+function saveActivityModal(){
+  const name=document.getElementById('field-activity-name').value.trim();
+  if(!name){document.getElementById('field-activity-name').focus();return;}
+  const activityDate=document.getElementById('field-activity-date').value||'';
+  const activityStatus=document.getElementById('field-activity-status').value||'todo';
+  // Task 1 (Activity Completed Date): only meaningful (and only ever
+  // enterable, since the field is disabled otherwise) while Status is
+  // Completed — cleared whenever Status isn't Completed, so a stale date
+  // can never linger on a re-opened To Do/In Progress/Review Activity.
+  const completedDate=activityStatus==='completed'?(document.getElementById('field-activity-completed-date').value||''):'';
+  const progress=ACTIVITY_STATUS_PROGRESS[activityStatus]!==undefined?ACTIVITY_STATUS_PROGRESS[activityStatus]:0;
+  const teamMembers=[...pickedActivityMembers];
+  if(activityModalMode==='add'){
+    const node={id:++idCounter,name,progress,persons:'',remarks:'',teamMembers,
+      activityDate,activityStatus,completedDate,
+      startDate:'',endDate:'',
+      history:[{ts:new Date().toISOString(),progress,note:'Created'}],children:[],level:4,open:true};
+    const parent=findNode(activityModalParentId,data.nodes);
+    if(parent){if(!parent.children)parent.children=[];parent.children.push(node);parent.open=true;}
+    toast('Added: '+name);
+  } else {
+    const node=findNode(activityModalEditId,data.nodes);
+    if(!node){closeActivityModal();return;}
+    const changed=node.name!==name||node.activityStatus!==activityStatus||node.activityDate!==activityDate||node.completedDate!==completedDate;
+    node.name=name;node.progress=progress;node.teamMembers=teamMembers;
+    node.activityDate=activityDate;node.activityStatus=activityStatus;node.completedDate=completedDate;
+    if(changed)node.history.push({ts:new Date().toISOString(),progress,note:'Updated'});
+    toast('Updated: '+name);
+  }
+  save();render();renderTimeline();
+  document.getElementById('activity-modal').classList.remove('open');
+}
+function deleteActivityFromModal(){
+  if(!activityModalEditId)return;
+  const id=activityModalEditId;
+  closeActivityModal();
+  askDelete(id);
 }
 
 // FEAT MODAL
@@ -15573,6 +15906,20 @@ function saveFeat(){
 // TRACKER MODAL (add/edit node)
 // ══════════════════════════════════════════════════════
 let modalMode=null,modalParentId=null,modalNodeLevel=0,modalEditId=null;
+// Task 1 (Task Type): shows the existing Asset Task Fields (Quantity/
+// Budget) whenever EITHER of its two independent triggers is true — the
+// pre-existing one (parent Project's own Type = 'Asset', unchanged) or the
+// new one (this Task's own Type = 'Purchase Item'). Reusable from both the
+// Add and Edit modal, and re-run on every Task Type change so picking
+// "Purchase Item" reveals the fields immediately without reopening the modal.
+function updateTaskAssetFieldsVisibility(){
+  if(modalNodeLevel!==2)return;
+  const taskType=document.getElementById('field-task-type').value||'General';
+  const parentId=modalMode==='add'?modalParentId:(findParent(modalEditId,data.nodes,null)||{}).id;
+  const parentProj=parentId!=null?findNode(parentId,data.nodes):null;
+  const showAssetTaskFields=(parentProj&&parentProj.phaseType==='Asset')||taskType==='Purchase Item';
+  document.getElementById('field-task-asset-wrap').style.display=showAssetTaskFields?'flex':'none';
+}
 function openAddModal(parentId,level){
   if(!canEdit())return;
   // Feature (Project-Level Access): adding a Task/Sub Task INTO an existing
@@ -15584,7 +15931,7 @@ function openAddModal(parentId,level){
   modalMode='add';modalParentId=parentId;modalNodeLevel=level;modalEditId=null;
   pickedModuleMembers=[];renderModuleMemberChips();
   // Level names: 0=App(Project), 1=Phase, 2=Job, 3=Task (features added from right panel)
-  const levelNames=['Program','Project','Task','Sub Task'];
+  const levelNames=['Program','Project','Task','Sub Task','Activity'];
   document.getElementById('modal-title').textContent='Add '+( levelNames[level]||'Item');
   document.getElementById('modal-subtitle').textContent='Fill in the details below';
   document.getElementById('modal-save-btn').textContent='Add';
@@ -15600,10 +15947,10 @@ function openAddModal(parentId,level){
   document.getElementById('field-end-date').value='';
   document.getElementById('field-dates-error').style.display='none';
   document.getElementById('field-update-note-wrap').style.display='none';
-  // Task 1/2 (Remove Remarks from Project & Phase): Remarks/Notes now shown
-  // only for Job (level 2) — Project and Phase use their Update Note
-  // mechanisms instead.
-  document.getElementById('field-remarks-wrap').style.display='none'; // Task 3: Remarks/Notes removed from the Task modal (was Task-only)
+  // Task 2 (Subtask Remark History): Remarks/Notes is shown again, now
+  // specifically for Sub Task (level 3) only — Project and Phase still use
+  // their own separate Update Note mechanisms, unchanged.
+  document.getElementById('field-remarks-wrap').style.display=(level===3)?'':'none';
   // Task 2 (Phase Update History): only meaningful once a Phase exists to
   // attach history to, so it never shows while adding a brand-new one.
   document.getElementById('field-phase-history-wrap').style.display='none';
@@ -15642,16 +15989,17 @@ function openAddModal(parentId,level){
   // Task 1 (Execution Mode): only on Project (level 1); default 'In-House'
   document.getElementById('field-execmode-wrap').style.display=(level===1)?'':'none';
   document.getElementById('field-execmode').value='In-House';
+  // Task 1 (Task Type): only on Task (level 2); default 'General'.
+  document.getElementById('field-task-type-wrap').style.display=(level===2)?'':'none';
+  document.getElementById('field-task-type').value='General';
   // Task 1 (Asset Task Fields): Quantity/Budget — Task (level 2) only, and
-  // only when the parent Project's Type = 'Asset'. Always reset to 0 so a
-  // fresh Add never carries over a value from a previous modal open.
-  {
-    const parentProjForAsset=level===2?findNode(parentId,data.nodes):null;
-    const showAssetTaskFields=level===2&&parentProjForAsset&&parentProjForAsset.phaseType==='Asset';
-    document.getElementById('field-task-asset-wrap').style.display=showAssetTaskFields?'flex':'none';
-    document.getElementById('field-task-qty').value=0;
-    document.getElementById('field-task-budget').value=0;
-  }
+  // only when the parent Project's Type = 'Asset', or this Task's own new
+  // Type is 'Purchase Item' (see updateTaskAssetFieldsVisibility). Always
+  // reset to 0 so a fresh Add never carries over a value from a previous
+  // modal open.
+  document.getElementById('field-task-qty').value=0;
+  document.getElementById('field-task-budget').value=0;
+  updateTaskAssetFieldsVisibility();
   // Task 3 (Template Integration): only ever shown when adding a new Phase.
   const tplWrap=document.getElementById('field-phase-template-wrap');
   if(tplWrap){
@@ -15665,8 +16013,10 @@ function openAddModal(parentId,level){
   document.getElementById('field-systask-wrap').style.display=level===3?'':'none';
   if(level===3)populateSystemTaskDropdown();
   document.getElementById('field-systask').value='';
-  // Task 2 (Gantt — Milestone flag): Task (level 2) and Sub Task (level 3) only
-  document.getElementById('field-milestone-wrap').style.display=(level===3)?'':'none'; // Task 3: Milestone removed from Task modal, kept for Sub Task
+  // Task 1 (Subtask Modal — Milestone Removed): the Milestone option no
+  // longer shows in the Add Subtask modal — it was previously Sub Task
+  // (level 3) only, so this simply always hides it now.
+  document.getElementById('field-milestone-wrap').style.display='none';
   document.getElementById('field-milestone').checked=false;
   // Task 1 (Dependency Field): Task (level 2) and Sub Task (level 3) only.
   // Candidates are every existing Task/Sub Task within the same Project the
@@ -15694,7 +16044,7 @@ function openEditModal(id){
   // separately from the Program-level check above (which only governs the
   // Program node itself).
   if(lvl>=1&&!canEditThisProjectScope(id,'edit')){toast('You do not have Edit permission for this Project','error');return;}
-  modalMode='edit';modalEditId=id;
+  modalMode='edit';modalEditId=id;modalNodeLevel=lvl;
   pickedModuleMembers=[...(node.teamMembers||[])];renderModuleMemberChips();
   const levelNames=['Program','Project','Task','Sub Task','Activity'];
   document.getElementById('modal-title').textContent='Edit '+levelNames[lvl]+': '+node.name;
@@ -15722,12 +16072,16 @@ function openEditModal(id){
   document.getElementById('field-start-date').value=node.startDate||'';
   document.getElementById('field-end-date').value=node.endDate||'';
   document.getElementById('field-dates-error').style.display='none';
-  document.getElementById('field-update-note-wrap').style.display=(lvl===1)?'none':'';
+  // Task 1 (Subtask Modal — Note Removed): the separate "Update Note" field
+  // no longer shows for Sub Task (level 3) — Remarks (added above the
+  // Dependency field, still shown for level 3) now fully replaces its
+  // history-logging role there. Unchanged for every other level.
+  document.getElementById('field-update-note-wrap').style.display=(lvl===1||lvl===3)?'none':'';
   document.getElementById('field-update-note').value='';
   document.getElementById('field-persons-wrap').style.display=lvl<=3?'':'none'; // Task 1 (Gantt Assigned To): extended to Task/Sub Task
-  // Task 1/2 (Remove Remarks from Project & Phase): Remarks/Notes now shown
-  // only for Job (level 2).
-  document.getElementById('field-remarks-wrap').style.display='none'; // Task 3: Remarks/Notes removed from the Task modal (was Task-only)
+  // Task 2 (Subtask Remark History): Remarks/Notes is shown again, now
+  // specifically for Sub Task (level 3) only.
+  document.getElementById('field-remarks-wrap').style.display=(lvl===3)?'':'none';
   // Task 2 (Phase Update History): shown only when editing an existing Phase.
   document.getElementById('field-phase-history-wrap').style.display=(lvl===1)?'':'none';
   if(lvl===1){
@@ -15765,16 +16119,17 @@ function openEditModal(id){
   // for existing Projects that predate this field.
   document.getElementById('field-execmode-wrap').style.display=(lvl===1)?'':'none';
   document.getElementById('field-execmode').value=node.executionMode||'In-House';
+  // Task 1 (Task Type): only on Task (level 2); default 'General' for
+  // existing Tasks that predate this field.
+  document.getElementById('field-task-type-wrap').style.display=(lvl===2)?'':'none';
+  document.getElementById('field-task-type').value=node.taskType||'General';
   // Task 1 (Asset Task Fields): Quantity/Budget — Task (level 2) only, and
-  // only when the parent Project's Type = 'Asset'. Existing Tasks that
-  // predate this field default to 0.
-  {
-    const parentProjForAsset=lvl===2?findParent(id,data.nodes,null):null;
-    const showAssetTaskFields=lvl===2&&parentProjForAsset&&parentProjForAsset.phaseType==='Asset';
-    document.getElementById('field-task-asset-wrap').style.display=showAssetTaskFields?'flex':'none';
-    document.getElementById('field-task-qty').value=(node.qty!==undefined&&node.qty!==null&&node.qty!=='')?node.qty:0;
-    document.getElementById('field-task-budget').value=(node.budget!==undefined&&node.budget!==null&&node.budget!=='')?node.budget:0;
-  }
+  // only when the parent Project's Type = 'Asset', or this Task's own Type
+  // is 'Purchase Item' (see updateTaskAssetFieldsVisibility). Existing
+  // Tasks that predate this field default to 0.
+  document.getElementById('field-task-qty').value=(node.qty!==undefined&&node.qty!==null&&node.qty!=='')?node.qty:0;
+  document.getElementById('field-task-budget').value=(node.budget!==undefined&&node.budget!==null&&node.budget!=='')?node.budget:0;
+  updateTaskAssetFieldsVisibility();
   // Task 1 (Select Template in Edit Phase): now shown when editing a Phase
   // too. Unlike Add mode, selecting/changing a template here only stores the
   // association on the Phase record — it never regenerates or duplicates
@@ -15792,8 +16147,12 @@ function openEditModal(id){
   document.getElementById('field-systask-wrap').style.display=lvl===3?'':'none';
   if(lvl===3)populateSystemTaskDropdown();
   document.getElementById('field-systask').value=node.systemTaskCode||'';
-  // Task 2 (Gantt — Milestone flag): Task (level 2) and Sub Task (level 3) only
-  document.getElementById('field-milestone-wrap').style.display=(lvl===3)?'':'none'; // Task 3: Milestone removed from Task modal, kept for Sub Task
+  // Task 1 (Subtask Modal — Milestone Removed): the Milestone option no
+  // longer shows in the Edit Subtask modal — it was previously Sub Task
+  // (level 3) only, so this simply always hides it now. The underlying
+  // node.isMilestone value is left completely untouched by this (still
+  // read-only visible in the Details tab), only the input is removed.
+  document.getElementById('field-milestone-wrap').style.display='none';
   document.getElementById('field-milestone').checked=!!node.isMilestone;
   // Task 1 (Dependency Field): Task (level 2) and Sub Task (level 3) only.
   document.getElementById('field-dependency-wrap').style.display=(lvl===2||lvl===3)?'':'none';
@@ -15802,17 +16161,24 @@ function openEditModal(id){
   _depCurrentProjectId=(lvl===2||lvl===3)?(depFindProjectAncestor(node.id)||{}).id:null;
   if(lvl===2||lvl===3)depUpdateSummary();
   document.getElementById('field-dependency-panel').style.display='none';
-  // Progress: only editable at Submodule (L2); auto-calculated at L1,L3; disabled at L4; removed entirely at L0 (Edit Project) and L2 (Edit Job)
+  // Progress: removed entirely at L0 (Edit Project), L1, L2 (Edit Job),
+  // L3 (Edit Subtask — Task 1: Progress Bar removed from the Subtask
+  // modal), and L4 (Feature = Done/Not Done only, no bar at all).
   const progWrap=document.getElementById('field-progress-wrap');
   const progSlider=document.getElementById('field-progress');
   if(lvl===4){progWrap.style.display='none';} // Feature = Done/Not Done only
   else if(lvl===0){progWrap.style.display='none';} // Task 1: Remove Progress Bar from Edit Project modal
   else if(lvl===1){progWrap.style.display='none';} // Task 1: Remove Progress Bar from Edit Project modal (Gantt Chart ticket)
   else if(lvl===2){progWrap.style.display='none';} // Task 1: Remove Progress Bar from Edit Job modal
+  else if(lvl===3){progWrap.style.display='none';} // Task 1: Remove Progress Bar from Edit Subtask modal
   else{progWrap.style.display='';progSlider.disabled=true;} // auto-calc, show but locked
   document.getElementById('modal').classList.add('open');
 }
-function editSelected(){if(selectedId)openEditModal(selectedId);}
+function editSelected(){
+  if(!selectedId)return;
+  const n=findNode(selectedId,data.nodes);
+  ((n&&(n.level||0)===4)?openActivityEditModal:openEditModal)(selectedId);
+}
 // Task 2 (Phase Update History): appends a new, timestamped, user-attributed
 // history entry immediately — independent of Save/Cancel — and never
 // overwrites or removes any previous entry. Reuses the Phase's existing
@@ -15864,6 +16230,49 @@ function renderPhaseUpdateHistoryTable(node){
       </tr>`;
     }).join('')}</tbody>
   </table>`;
+}
+// Task 2 (Subtask Remark History): replaces the old featuresMap Activity
+// list in the right panel's second tab. Reads the same node.history[]
+// array every node already has (same reuse pattern as
+// renderPhaseUpdateHistoryTable above) — each entry shows its note (the
+// Remark text, when the entry came from a Remarks change) and when it was
+// logged. Scoped to Sub Task (level 3), matching where Remarks is now
+// editable in the Add/Edit Subtask modal.
+function renderSubtaskRemarks(){
+  const wrap=document.getElementById('subtask-remarks-content');
+  if(!wrap)return;
+  if(!selectedId){
+    wrap.innerHTML='<div style="padding:28px 14px;text-align:center;color:var(--muted2);font-size:12px">📌 Select an item to view its remarks.</div>';
+    return;
+  }
+  const node=findNode(selectedId,data.nodes);
+  const lvl=node?node.level||0:0;
+  if(lvl!==3){
+    wrap.innerHTML='<div style="padding:28px 14px;text-align:center;color:var(--muted2);font-size:12px">🔒 Remarks are only available at Sub Task level.</div>';
+    return;
+  }
+  const entries=(node.history||[]).slice().reverse();
+  if(!entries.length){
+    wrap.innerHTML='<div style="padding:28px 14px;text-align:center;color:var(--muted2);font-size:12px">No remarks yet.</div>';
+    return;
+  }
+  wrap.innerHTML=`<div style="display:flex;flex-direction:column;gap:8px">${entries.map(e=>{
+    const d=e.ts?new Date(e.ts):null;
+    const updatedOn=d?(d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})+' '+d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})):'—';
+    return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px">
+      <div style="font-size:13px;color:var(--text);white-space:pre-wrap;word-break:break-word">${eH(e.note||'')}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px">Updated On: ${updatedOn}</div>
+    </div>`;
+  }).join('')}</div>`;
+}
+// Task 1 (Remarks Panel): opens the right-side panel directly on the
+// Remarks tab for a given Sub Task — the Sub Task Ribbon's dedicated
+// Remarks button uses this instead of the generic double-click, which
+// only reveals whichever tab was already active.
+function openSubtaskRemarksPanel(id){
+  selectNode(id);
+  openSidePane();
+  switchSideTab('features');
 }
 function closeModal(e){if(e&&e.target!==document.getElementById('modal'))return;document.getElementById('modal').classList.remove('open');}
 // Task 1: Phase (level 1) date validation — must fall within parent Project's date range,
@@ -15985,6 +16394,8 @@ function saveModal(){
   const executionMode=document.getElementById('field-execmode').value||'In-House';
   const dueDate=document.getElementById('field-duedate').value||'';
   const systemTaskCode=document.getElementById('field-systask').value||'';
+  // Task 1 (Task Type): Task (level 2) only, default 'General'.
+  const taskType=document.getElementById('field-task-type').value||'General';
   // Task 1 (Asset Task Fields): Quantity/Budget — Task (level 2) only.
   // Always parsed as numbers, defaulting to 0 (never blank), per spec.
   const taskQtyInput=document.getElementById('field-task-qty').value;
@@ -16008,6 +16419,7 @@ function saveModal(){
       dueDate:modalNodeLevel===2?dueDate:'',
       systemTaskCode:modalNodeLevel===3?systemTaskCode:'',
       qty:modalNodeLevel===2?taskQty:0,
+      taskType:modalNodeLevel===2?taskType:'',
       // budget already carries Program/Project's own value at level 0/1
       // above; a Task (level 2) gets its own Budget captured here instead.
       isMilestone:(modalNodeLevel===2||modalNodeLevel===3)?isMilestone:false,
@@ -16053,6 +16465,15 @@ function saveModal(){
       }
     }
     const note=document.getElementById('field-update-note').value.trim();
+    // Task 2 (Subtask Remark History): when a Sub Task's Remarks actually
+    // changed and no separate Update Note was typed, use the Remarks text
+    // itself as the history entry's note — so the new Remark History panel
+    // (which reads this same node.history[] array, same pattern already
+    // used by Phase Update History) shows the actual remark, not a generic
+    // "Updated". An explicit Update Note, if provided, still takes
+    // priority — unchanged from existing behavior for every other case.
+    const remarksChanged=(node.level||0)===3&&node.remarks!==remarks;
+    const effectiveNote=note||(remarksChanged?remarks:'');
     const changed=node.progress!==progress||node.name!==name||node.remarks!==remarks||!!note;
     let _tplEditNote=null;
     // Task 1: team assignment now solely via the Team Picker (teamMembers) — node.persons (legacy free text) is left untouched
@@ -16087,12 +16508,15 @@ function saveModal(){
         node.templateId=phaseTemplateId;
       }
     }
-    if((node.level||0)===2){node.dueDate=dueDate;node.qty=taskQty;node.budget=taskBudget;}
+    if((node.level||0)===2){node.dueDate=dueDate;node.qty=taskQty;node.budget=taskBudget;node.taskType=taskType;}
     if((node.level||0)===3){node.systemTaskCode=systemTaskCode;}
-    if(changed)node.history.push({ts:new Date().toISOString(),progress,note:note||'Updated'});
+    if(changed)node.history.push({ts:new Date().toISOString(),progress,note:effectiveNote||'Updated'});
     toast(_tplEditNote||('Updated: '+name));
   }
   save();render();renderTimeline();
+  // Task 2 (Subtask Remark History): keep the Remarks panel in sync
+  // immediately if it happens to be the currently open tab.
+  if(document.getElementById('panel-features').classList.contains('active'))renderSubtaskRemarks();
   // Task 3 (Data Synchronization): keep Workflow Progress live in sync with
   // any Project Structure change, not only the Phase history Add button.
   if(typeof renderWorkflowProgress==='function')renderWorkflowProgress();
@@ -16143,8 +16567,8 @@ function modalDeleteClick(){
 // (that's an ordinary edit decision) — only DESCENDANT active records,
 // and any Activities linked directly to the node itself, do.
 function arCollectDeletionImpact(node){
-  const levelNames=['Program','Project','Task','Sub Task'];
-  const nodeCounts=[0,1,2,3].map(()=>({active:0,completed:0}));
+  const levelNames=['Program','Project','Task','Sub Task','Activity'];
+  const nodeCounts=[0,1,2,3,4].map(()=>({active:0,completed:0}));
   const masterFeats=loadMasterFeats();
   let actActive=0,actCompleted=0;
   // Task 1 (Quick-Resolve Active Blockers): the topmost active node in
@@ -16171,7 +16595,7 @@ function arCollectDeletionImpact(node){
         if(done)nodeCounts[lvl].completed++; else nodeCounts[lvl].active++;
       }
       if(lvl===2||lvl===3)tallyActivities(child);
-      if((lvl===1||lvl===2||lvl===3)&&calcProgress(child)!==100){
+      if((lvl===1||lvl===2||lvl===3||lvl===4)&&calcProgress(child)!==100){
         blockerNodes.push({id:child.id,name:child.name,level:lvl,levelLabel:levelNames[lvl]});
         return; // don't descend further — completing this cascades to everything beneath it
       }
@@ -16311,7 +16735,7 @@ function askDelete(id){
   pendingDeleteId=id;
   pendingDeleteBlocked=false;
   pendingDeleteNeedsSuperadminConfirm=false;
-  const levelNames=['Program','Project','Task','Sub Task'];
+  const levelNames=['Program','Project','Task','Sub Task','Activity'];
   const lvl=node.level||0;
   const levelName=levelNames[lvl]||'Item';
   const yesBtn=document.getElementById('confirm-yes-btn');
@@ -16338,7 +16762,7 @@ function askDelete(id){
   // No active records — but completed Projects/Tasks/Sub Tasks/Activities
   // (historical data) are gated to Super Admin only, per requirement.
   const completedLines=[];
-  [1,2,3].forEach(l=>{
+  [1,2,3,4].forEach(l=>{
     const n=impact.nodeCounts[l].completed;
     if(n>0)completedLines.push(`${n} completed ${impact.levelNames[l]}${n===1?'':'s'}`);
   });
@@ -16445,7 +16869,7 @@ function toast(msg){const el=document.getElementById('toast');el.textContent=msg
 
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){
-    ['confirm-box','member-picker-modal','view-meeting-modal','member-detail-modal','resetpw-modal','tm-edit-modal','backlog-modal','sel-feat-modal','tl-modal','ms-modal','activity-details-modal','task-info-modal','completion-date-modal','mom-attendance-view-modal','mom-item-expand-modal','mytask-remarks-modal']
+    ['confirm-box','member-picker-modal','view-meeting-modal','member-detail-modal','resetpw-modal','tm-edit-modal','backlog-modal','sel-feat-modal','tl-modal','ms-modal','activity-details-modal','task-info-modal','completion-date-modal','mom-attendance-view-modal','mom-item-expand-modal','mytask-remarks-modal','activity-modal']
       .forEach(id=>document.getElementById(id).classList.remove('open'));
   }
   if(e.key==='Enter'&&document.getElementById('modal').classList.contains('open')){if(document.activeElement.tagName!=='TEXTAREA')saveModal();}
@@ -16812,7 +17236,6 @@ function getMyTasks(){
   // own getAppName() — since a stale in-memory snapshot was intermittently
   // causing Task/Sub Task assignments to silently resolve to nothing too.
   const _freshData=load();
-  const mtgFeats=loadMtgFeats();
   function walkProjectAssignments(node){
     (node.children||[]).forEach(child=>{
       const lvl=child.level||0;
@@ -16848,50 +17271,60 @@ function getMyTasks(){
           });
         });
       }
+      // Task 1 (Activity Data Source — Program Tree Reconnect): Activities
+      // now come from the real Program tree (level 4, child of Sub Task —
+      // Program → Project → Task → Sub Task → Activity) instead of the
+      // legacy featuresMap/masterFeatures table, which is no longer read
+      // here at all. Same reasoning as the Task/Sub Task branch above:
+      // reuses node.progress-derived status and node.history for remarks,
+      // no parallel system. Path shown excludes the Activity's own name,
+      // same convention the legacy source used (already shown in Task Name).
+      if(lvl===4&&(child.teamMembers||[]).length){
+        let completedDate='';
+        if(Array.isArray(child.history)){
+          const done=child.history.filter(h=>h.progress>=100).sort((a,b)=>new Date(b.ts)-new Date(a.ts))[0];
+          if(done)completedDate=done.ts;
+        }
+        const pathParts=[];
+        let _pw=findParent(child.id,_freshData.nodes||[],null);
+        while(_pw){pathParts.unshift(_pw.name);_pw=findParent(_pw.id,_freshData.nodes||[],null);}
+        // Root-cause fix (Activity Status Not Displaying Correctly):
+        // calcProgress()'s level-4 rule is intentionally binary (only ever
+        // 0 or 100 — see its own "Feature: 100 if done, else 0" comment),
+        // so deriving My Task's status from it made the `pct>0` branch
+        // below unreachable: every non-Completed Activity (To Do, In
+        // Progress, Review alike) always collapsed to 'pending', and
+        // filtering My Tasks by "In Progress" would show none of them even
+        // when the Activity itself genuinely was. Reading the Activity's
+        // own activityStatus directly — the same authoritative field the
+        // Task Ribbon and Activity Board already treat as the source of
+        // truth — fixes this: 'review' folds into 'inprogress' to fit My
+        // Task's existing 3-value status vocabulary (pending/inprogress/
+        // completed), same as the Task/Sub Task branch above already uses.
+        child.teamMembers.forEach(mid=>{
+          const actStatus=child.activityStatus||'todo';
+          const status=actStatus==='completed'?'completed':(actStatus==='todo'?'pending':'inprogress');
+          tasks.push({
+            source:'Project',
+            isActivity:true,
+            nodeId:child.id,
+            taskName:child.name,
+            meetingNumber:'',
+            meetingDate:'',
+            assignedDate:child.activityDate||'',
+            completedDate,
+            activityPath:pathParts.join('\\'),
+            assignedToId:mid,
+            assignedToName:teamName(mid),
+            status,
+            remarksLog:(child.history||[]).filter(h=>h.note).map(h=>({text:h.note,dateTime:h.ts}))
+          });
+        });
+      }
       walkProjectAssignments(child);
     });
   }
   (_freshData.nodes||[]).forEach(program=>walkProjectAssignments(program));
-  // Activities: iterate the actual master-feature records directly, resolve
-  // each one's parent Task/Sub Task by the same submoduleId/moduleId
-  // reference used throughout the app, and its assignees via the
-  // meeting-feature bridge (mtgFeats).
-  loadMasterFeats().forEach(f=>{
-    const pid=f.submoduleId||f.moduleId;
-    if(!pid)return;
-    const parentNode=findNode(pid,_freshData.nodes||[]);
-    if(!parentNode)return;
-    // Task 4 (Activity Path): the ancestor chain of the Activity's parent
-    // Task/Sub Task — Program → Project → Task → Sub Task, whichever levels
-    // actually exist above it — reusing the same findNode/findParent walk
-    // already used elsewhere in the app (e.g. the Testing & Approval
-    // module's own path display) rather than a new resolution mechanism.
-    // Does not include the Activity's own name, since that's already shown
-    // in the Task Name column.
-    const pathParts=[parentNode.name];
-    let _pw=findParent(parentNode.id,_freshData.nodes||[],null);
-    while(_pw){pathParts.unshift(_pw.name);_pw=findParent(_pw.id,_freshData.nodes||[],null);}
-    const assignedIds=new Set();
-    mtgFeats.filter(r=>r.featureId===f.id).forEach(r=>(r.assignedTo||[]).forEach(mid=>assignedIds.add(mid)));
-    (f.defaultAssignedTo||[]).forEach(mid=>assignedIds.add(mid));
-    assignedIds.forEach(mid=>{
-      tasks.push({
-        source:'Project',
-        isActivity:true,
-        nodeId:f.id,
-        taskName:f.name,
-        meetingNumber:'',
-        meetingDate:'',
-        assignedDate:'', // No due-date field exists on Activities (same as Job/Task History's handling)
-        completedDate:f.completedDate||'',
-        activityPath:pathParts.join('\\'),
-        assignedToId:mid,
-        assignedToName:teamName(mid),
-        status:f.status==='completed'?'completed':(f.status==='inprogress'?'inprogress':'pending'),
-        remarksLog:[]
-      });
-    });
-  });
 
   tasks.sort((a,b)=>new Date(b.meetingDate||b.assignedDate||0)-new Date(a.meetingDate||a.assignedDate||0));
   // Superadmin has unrestricted access everywhere else in the app and is a
@@ -17008,6 +17441,17 @@ document.addEventListener('click',function(e){
 function myTaskFormatMeetingNo(num){
   return (num||'').replace(/^MTG-/,'M');
 }
+// Task 2 (Two Tabs): 'active' = Pending + In Progress, 'completed' =
+// Completed. Just a display-time filter over the same live task list —
+// nothing is stored per-tab, so a task moves itself the moment its status
+// changes, automatically appearing under whichever tab now matches.
+let myTaskActiveTab='active';
+function switchMyTaskTab(tab){
+  myTaskActiveTab=tab;
+  document.getElementById('mytask-tab-active').classList.toggle('active',tab==='active');
+  document.getElementById('mytask-tab-completed').classList.toggle('active',tab==='completed');
+  renderMyTaskTable();
+}
 function renderMyTaskTable(){
   const tbody=document.getElementById('mytask-tbody');
   if(!tbody)return;
@@ -17015,6 +17459,9 @@ function renderMyTaskTable(){
   const q=(document.getElementById('mytask-search')?.value||'').toLowerCase().trim();
   const statusFilter=document.getElementById('mytask-filter-status')?.value||'';
   let tasks=getMyTasks();
+  // Task 2 (Two Tabs): applied before the other filters below, same as
+  // every other filter in this function.
+  tasks=tasks.filter(t=>myTaskActiveTab==='completed'?t.status==='completed':t.status!=='completed');
   // Search: task/meeting-number/assignee name, plus (new) employee number
   // (team.code) and raw member id — a quick way to find someone's tasks
   // without opening the Assigned Person dropdown.

@@ -1665,7 +1665,14 @@ body.readonly .icon-btn.tl-expand-details-btn{pointer-events:auto;opacity:1;}
       <!-- Task 2 (System-Driven Dashboard): every figure here is computed
            fresh from data.nodes on each render — nothing is stored
            separately, so it's always in sync with Project Structure. -->
-      <div id="ar-stats-bar" style="display:flex;gap:22px;flex-wrap:wrap;font-size:13px;color:var(--text)"></div>
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <div id="ar-stats-bar" style="display:flex;gap:22px;flex-wrap:wrap;font-size:13px;color:var(--text)"></div>
+        <!-- Task 1 (View PO KPI): procurement-stage breakdown, scoped to
+             whichever Project the Asset Information tab's own Project
+             filter is currently set to — reuses that same filter state
+             rather than adding a second, separate project selector. -->
+        <button class="btn btn-ghost btn-sm" onclick="openPoKpiModal()">📊 View PO KPI</button>
+      </div>
     </div>
     <div class="side-tabs" style="border-radius:8px 8px 0 0;border:1px solid var(--border);border-bottom:1px solid var(--border)">
       <button class="side-tab active" id="ar-tab-1" onclick="switchAssetReadinessTab('1')">Asset Information</button>
@@ -1730,6 +1737,19 @@ body.readonly .icon-btn.tl-expand-details-btn{pointer-events:auto;opacity:1;}
           </div>
         </div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Task 1 (View PO KPI Modal): read-only procurement-stage breakdown for
+     the currently-selected Asset-type Project (reuses the Asset
+     Information tab's own Project filter — see arProjectFilterSelected). -->
+<div class="modal-overlay" id="po-kpi-modal" onclick="closePoKpiModal(event)">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-head"><div><h2>Purchase Order Status</h2><p id="po-kpi-program-label">—</p></div><button class="modal-close" onclick="closePoKpiModal()">✕</button></div>
+    <div class="modal-body" id="po-kpi-body" style="display:flex;flex-direction:column;gap:10px"></div>
+    <div class="modal-foot" style="justify-content:flex-end">
+      <button class="btn btn-primary" onclick="closePoKpiModal()">Close</button>
     </div>
   </div>
 </div>
@@ -9070,16 +9090,12 @@ const DEFAULT_SB_CONFIG={
 
 // Single switch for Testing vs Production Supabase table. Change APP_ENV only —
 // every real database operation reads TABLE_NAME derived from it below.
-// Root-cause fix (Cross-Device Data Invisibility): this was hardcoded to
-// 'TEST' from the very first version of this file — meaning every read/
-// write went to b2_tracker_data_Testing, a completely different table from
-// b2_tracker_data (the one this app's actual production data lives in, and
-// the one every other fix in this codebase has been diagnosed and verified
-// against). Any session running a build with this set to 'TEST' would
-// silently read and write a different table than a session running a
-// build with it set to 'PROD' — with no error, nothing to sync or merge,
-// because they were never looking at the same place. Set to 'PROD' so
-// there is exactly one table in play, matching production data.
+// Task 2 (Default Database Connection): set to 'TEST' per explicit request —
+// this generated build now defaults to b2_tracker_data_Testing rather than
+// the production table (b2_tracker_data). As before, this must stay the
+// SAME value across every build/session actually meant to share data —
+// mixing 'TEST' and 'PROD' builds means they're silently reading/writing
+// two different tables with nothing to sync or merge between them.
 const APP_ENV = 'PROD'; // TEST or PROD
 const TABLE_NAME =
     APP_ENV === 'TEST'
@@ -9391,6 +9407,35 @@ function dsFileImport(input){
       else throw new Error('Unrecognised JSON structure. Expected {nodes} or {modules}.');
       // Merge into app
       data=Object.assign(data,imported);
+      // Task 1 (Import/Export — Full Data Restore): dsFileExport() already
+      // writes every one of these stores (via the same _serialize() used
+      // for cloud sync — see there), but import only ever restored `nodes`
+      // (Program → Project → Task → Sub Task → Activity — Activity is
+      // included automatically here, since it's a real tree node like
+      // everything else) and silently dropped the rest of the file. Each
+      // store below is now restored too, when actually present in the
+      // imported file — a straight wholesale replace via the exact same
+      // save*() functions/localStorage keys every other part of the app
+      // already writes through, matching how `nodes` has always been
+      // imported (no separate storage path, no re-merging, so nothing
+      // here can create a duplicate). Gated per-field so an older export
+      // file that predates one of these stores just leaves that store
+      // untouched, rather than wiping it.
+      if(Array.isArray(raw.users))saveUsers(raw.users);
+      if(Array.isArray(raw.teams))saveTeams(raw.teams);
+      if(Array.isArray(raw.meetings))saveMeetings(raw.meetings);       // Meeting Management
+      if(Array.isArray(raw.mom))saveMomList(raw.mom);                 // Meeting Minutes — My Task's Meeting source
+      if(Array.isArray(raw.mtgFeats))saveMtgFeats(raw.mtgFeats);       // Meeting↔Activity assignment bridge
+      if(Array.isArray(raw.templates))saveTemplates(raw.templates);
+      if(Array.isArray(raw.milestones))saveMilestones(raw.milestones);
+      if(Array.isArray(raw.masterFeatures))saveMasterFeats(raw.masterFeatures); // My Task/Task Board — legacy Activity source
+      if(raw.features&&typeof raw.features==='object'){featuresMap=raw.features;saveFeatures();}
+      // Task 1: re-sync the id counter and repair any duplicate ids in the
+      // freshly-imported tree — the exact same self-healing pass already
+      // run after every Supabase sync/boot, so an imported file can never
+      // leave stale/colliding ids behind for the next Add to collide with.
+      initIdCounter(data.nodes);
+      _dedupeNodeIds(data.nodes);
       save();render();updateStats();renderFeatures();
       window._DS.setDataSource('file');
       _dsRefreshRows();_dsRefreshStatus();
@@ -14133,6 +14178,27 @@ function arCollectTasks(node){
 function arFindTaskByCode(phase,code){
   return arCollectTasks(phase).find(t=>t.systemTaskCode===code)||null;
 }
+// Task 1 (PO KPI — Current Procurement Stage): for a single Asset (a Task,
+// level 2), walks SYSTEM_TASK_LIBRARY in its own canonical sequence order
+// and returns the LAST (furthest-along) stage that has at least one
+// completed (progress 100) Sub Task tagged with that System Task code.
+// This is deliberately about sequence position, not completion timestamp —
+// an Asset with both "Requirement Stage" and "PR Raised" completed is at
+// "PR Raised" (it comes later in the process), regardless of which one was
+// literally marked done last. Returns null if none are completed yet.
+// Reuses the existing System Task field (node.systemTaskCode) — no new
+// stage/status system is introduced.
+function arAssetCurrentSystemStage(task){
+  const subtasks=(task.children||[]).filter(c=>(c.level||0)===3);
+  const completedCodes=new Set(
+    subtasks.filter(st=>st.systemTaskCode&&calcProgress(st)===100).map(st=>st.systemTaskCode)
+  );
+  let lastStage=null;
+  SYSTEM_TASK_LIBRARY.forEach(stage=>{
+    if(completedCodes.has(stage.code))lastStage=stage;
+  });
+  return lastStage;
+}
 // Overall Progress: reuses the existing calcProgress() aggregation already
 // used everywhere else in the tree/timeline rather than reimplementing it.
 function arOverallProgress(phase){ return calcProgress(phase); }
@@ -14260,26 +14326,20 @@ function switchAssetReadinessTab(tab){
 function renderAssetStatsBar(){
   const bar=document.getElementById('ar-stats-bar');
   if(!bar)return;
-  const phases=arAllPhases();
-  const total=phases.length;
-  const operationalReady=phases.filter(p=>arReadinessStatus(p)==='Completed').length;
-  // "Procurement in Progress": the active Current Stage's Job contains a
-  // Tender/PO-tagged System Task that isn't complete yet.
-  const procurement=phases.filter(p=>{
-    const stage=(p.children||[]).find(j=>(j.level||0)===2&&calcProgress(j)<100);
-    if(!stage)return false;
-    return arCollectTasks(stage).some(t=>(t.systemTaskCode==='SYS_TENDER'||t.systemTaskCode==='SYS_PO')&&t.progress<100);
-  }).length;
-  const delivery=phases.filter(p=>{
-    const t=arFindTaskByCode(p,'SYS_DELIVERY');
-    return t&&t.progress<100;
-  }).length;
-  const overallReadiness=total?Math.round(phases.reduce((s,p)=>s+arOverallProgress(p),0)/total):0;
+  // Task 1 (Total Asset KPI — Corrected): an "Asset" is a Task (level 2)
+  // under an Asset-type Project, not the Project itself — previously this
+  // counted Asset-type Projects (arAllPhases().length), which is why it
+  // showed 1 instead of the real number of Asset items underneath it.
+  // Scoped to the same Project filter the Asset Information table below
+  // already uses, so the two stay consistent with each other.
+  let rows=arAllAssetTaskRows();
+  if(arProjectFilterSelected!=='all')rows=rows.filter(r=>r.phase.id===parseInt(arProjectFilterSelected));
+  const total=rows.length;
+  let phases=arAllPhases();
+  if(arProjectFilterSelected!=='all')phases=phases.filter(p=>p.id===parseInt(arProjectFilterSelected));
+  const overallReadiness=phases.length?Math.round(phases.reduce((s,p)=>s+arOverallProgress(p),0)/phases.length):0;
   bar.innerHTML=`
     <span>Total Assets: <b>${total}</b></span>
-    <span>Operational Ready: <b>${operationalReady}</b></span>
-    <span>Procurement in Progress: <b>${procurement}</b></span>
-    <span>Delivery: <b>${delivery}</b></span>
     <span>Overall Readiness: <b>${overallReadiness}%</b></span>`;
 }
 // Task 1 (Asset Information — Project Filter): single-select dropdown,
@@ -14322,12 +14382,53 @@ function arProjectFilterPick(val){
   document.getElementById('ar-project-filter-dropdown').style.display='none';
   updateArProjectFilterBtnLabel();
   renderAssetInformationTable();
+  // Task 1 (Total Asset KPI): the stats bar now also scopes to this same
+  // filter (see renderAssetStatsBar), so it needs to refresh here too.
+  renderAssetStatsBar();
 }
 document.addEventListener('click',function(e){
   const wrap=document.getElementById('ar-project-filter-wrap');
   const dd=document.getElementById('ar-project-filter-dropdown');
   if(dd&&dd.style.display==='block'&&wrap&&!wrap.contains(e.target))dd.style.display='none';
 });
+// Task 1 (View PO KPI Modal): scoped to whichever Project the Asset
+// Information tab's filter is currently set to. "All" isn't a meaningful
+// single procurement pipeline to show counts against, so it's asked to be
+// narrowed to one Project first, rather than silently mixing every Asset-
+// type Project's Tasks together.
+function openPoKpiModal(){
+  if(arProjectFilterSelected==='all'){
+    toast('Select a specific Project above first, to view its PO KPI','error');
+    return;
+  }
+  const proj=findNode(parseInt(arProjectFilterSelected),data.nodes);
+  if(!proj)return;
+  const program=findParent(proj.id,data.nodes,null);
+  document.getElementById('po-kpi-program-label').textContent='Program: '+(program?program.name:'—')+'  ·  Project: '+proj.name;
+  const tasks=(proj.children||[]).filter(t=>(t.level||0)===2);
+  // Task 1: latest completed System Task stage per Asset (Task) — each
+  // Asset contributes to exactly one stage bucket, so nothing is ever
+  // double-counted (see arAssetCurrentSystemStage).
+  const stageCounts={};
+  SYSTEM_TASK_LIBRARY.forEach(s=>stageCounts[s.code]=0);
+  tasks.forEach(t=>{
+    const stage=arAssetCurrentSystemStage(t);
+    if(stage)stageCounts[stage.code]++;
+  });
+  const row=(label,count,bold)=>`<div style="display:flex;align-items:center;gap:8px">
+    <span style="white-space:nowrap;${bold?'font-weight:700;font-size:14px':'font-size:13px;color:var(--text)'}">${eH(label)}</span>
+    <span style="flex:1;border-bottom:2px dashed var(--border);margin:0 4px;min-width:20px"></span>
+    <span class="node-badge badge-amber" style="min-width:38px;text-align:center;font-weight:700">${count}</span>
+  </div>`;
+  let html=row('Total Task',tasks.length,true);
+  SYSTEM_TASK_LIBRARY.forEach(s=>{html+=row(s.name,stageCounts[s.code],false);});
+  document.getElementById('po-kpi-body').innerHTML=html;
+  document.getElementById('po-kpi-modal').classList.add('open');
+}
+function closePoKpiModal(e){
+  if(e&&e.target!==document.getElementById('po-kpi-modal'))return;
+  document.getElementById('po-kpi-modal').classList.remove('open');
+}
 function renderAssetInformationTable(){
   const container=document.getElementById('ar-table-container');
   if(!container)return;
@@ -16869,7 +16970,7 @@ function toast(msg){const el=document.getElementById('toast');el.textContent=msg
 
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){
-    ['confirm-box','member-picker-modal','view-meeting-modal','member-detail-modal','resetpw-modal','tm-edit-modal','backlog-modal','sel-feat-modal','tl-modal','ms-modal','activity-details-modal','task-info-modal','completion-date-modal','mom-attendance-view-modal','mom-item-expand-modal','mytask-remarks-modal','activity-modal']
+    ['confirm-box','member-picker-modal','view-meeting-modal','member-detail-modal','resetpw-modal','tm-edit-modal','backlog-modal','sel-feat-modal','tl-modal','ms-modal','activity-details-modal','task-info-modal','completion-date-modal','mom-attendance-view-modal','mom-item-expand-modal','mytask-remarks-modal','activity-modal','po-kpi-modal']
       .forEach(id=>document.getElementById(id).classList.remove('open'));
   }
   if(e.key==='Enter'&&document.getElementById('modal').classList.contains('open')){if(document.activeElement.tagName!=='TEXTAREA')saveModal();}
@@ -17239,7 +17340,16 @@ function getMyTasks(){
   function walkProjectAssignments(node){
     (node.children||[]).forEach(child=>{
       const lvl=child.level||0;
-      if((lvl===2||lvl===3)&&(child.teamMembers||[]).length){
+      // Root-cause fix (Assigned Activities Not Included): teamMembers was
+      // only checked with `(child.teamMembers||[]).length` — if it's ever
+      // a non-array (an object, from a sync/merge round-trip that didn't
+      // preserve array shape), that silently evaluates to falsy and the
+      // whole assignment is skipped, even though it genuinely has
+      // assignees. Job/Task History already guards against exactly this
+      // with an explicit Array.isArray() check; applying the same guard
+      // here, consistently for both branches below.
+      const hasTeamMembers=Array.isArray(child.teamMembers)&&child.teamMembers.length;
+      if((lvl===2||lvl===3)&&hasTeamMembers){
         // Completed Date (Task/Sub Task): reuses the same node.history lookup
         // already used by Job/Task History's Completed Date column — the
         // latest history entry that reached 100% — rather than adding a
@@ -17279,7 +17389,7 @@ function getMyTasks(){
       // reuses node.progress-derived status and node.history for remarks,
       // no parallel system. Path shown excludes the Activity's own name,
       // same convention the legacy source used (already shown in Task Name).
-      if(lvl===4&&(child.teamMembers||[]).length){
+      if(lvl===4&&hasTeamMembers){
         let completedDate='';
         if(Array.isArray(child.history)){
           const done=child.history.filter(h=>h.progress>=100).sort((a,b)=>new Date(b.ts)-new Date(a.ts))[0];
@@ -17546,12 +17656,13 @@ function renderMyTaskTable(){
       </td>
       <td style="padding:5px 10px;white-space:nowrap">${t.assignedDate?eH(formatDateShort(t.assignedDate)):'—'}</td>
       <td style="padding:5px 10px">${assignedCell}</td>
-      <td style="padding:5px 10px">
-        <select onchange="${statusOnchange}" ${canEdit()?'':'disabled'} style="width:100%;min-width:110px;box-sizing:border-box;padding:4px 6px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-family:var(--font-body)">
+      <td style="padding:5px 10px">${t.isActivity
+        ? `<span style="display:inline-block;padding:4px 8px;font-size:12px;border-radius:6px;background:var(--surface2);color:var(--text)" title="Status is set from the Activity Modal in Project Structure">${eH({pending:'Pending',inprogress:'In Progress',completed:'Completed'}[t.status]||t.status)}</span>`
+        : `<select onchange="${statusOnchange}" ${canEdit()?'':'disabled'} style="width:100%;min-width:110px;box-sizing:border-box;padding:4px 6px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-family:var(--font-body)">
           <option value="pending"${t.status==='pending'?' selected':''}>Pending</option>
           <option value="inprogress"${t.status==='inprogress'?' selected':''}>In Progress</option>
           <option value="completed"${t.status==='completed'?' selected':''}>Completed</option>
-        </select>
+        </select>`}
       </td>
       <td style="padding:5px 10px">${completedDateCell}</td>
       <td style="padding:5px 10px">${totalDue===null?'—':totalDue}</td>
@@ -17775,6 +17886,16 @@ function myTaskSetStatusProjectItem(nodeId,newStatus){
   // Task/Sub Task tree node
   const node=findNode(nodeId,data.nodes);
   if(node){
+    // Task 1 (Activity Modal — Single Source of Truth): Activity (level 4)
+    // status is only ever set from the Activity Modal now — My Tasks shows
+    // it read-only (see renderMyTaskTable). This is a defensive guard, not
+    // the primary fix: since My Tasks no longer renders an editable
+    // control for Activities, this should never actually be reachable for
+    // one — but without it, mutating node.progress here (Task/Sub Task's
+    // own status field) would silently leave an Activity's real status
+    // field, activityStatus, unchanged and out of sync with what this
+    // would have displayed.
+    if((node.level||0)===4){toast('Activity status can only be changed from the Activity Modal in Project Structure','error');renderMyTaskTable();return;}
     node.progress=progressMap[newStatus];
     if(!node.history)node.history=[];
     node.history.push({ts:new Date().toISOString(),progress:node.progress,note:'Status updated to '+(statusLabels[newStatus]||newStatus)});

@@ -8260,36 +8260,51 @@ function renderDashboard(){
   if(!teams.length){
     perfDiv.innerHTML='<p style="color:var(--muted2);font-size:12px;padding:8px">No team members yet.</p>';
   } else {
-    // Root-cause fix (Team Workload — Wrong Data Source): this previously
-    // computed Active/Overdue entirely from the abandoned legacy Activity
-    // store (masterFeatures/mtgFeats/featuresMap) — data no longer written
-    // by any current workflow (My Task, the Activity Board, and Project
-    // Structure's own Activity Modal all moved off this store), which is
-    // why every member showed 0 regardless of their real assignments.
-    // Task 1: rebuilt on the same canonical task list My Task itself uses
-    // (getAllProjectAndMeetingTasks()), narrowed to exactly "Meeting Tasks
-    // + Activities" per spec — Project Structure Task/Sub Task assignments
-    // are deliberately excluded here, unlike My Task's own broader view.
-    // Active = status !== 'completed' (Pending/In Progress/Review, whichever
-    // of these actually apply to a given source — Meeting Tasks only ever
-    // have Pending/In Progress/Completed, Activities have all four, folded
-    // to this same 3-value vocabulary by getAllProjectAndMeetingTasks()).
-    // Overdue = today past the task's own due date (Meeting Task: the
-    // Meeting Minutes modal's Due Date; Activity: the Activity Modal's Due
-    // Date) — both already surfaced as `assignedDate` on every task object,
-    // so no per-source branching is needed here.
-    const today=new Date();today.setHours(0,0,0,0);
-    const allTasks=getAllProjectAndMeetingTasks().filter(t=>t.source==='Meeting'||t.isActivity);
+    // Compute active work and overdue per member from featuresMap and master features
+    const master=loadMasterFeats();
+    const bridge=loadMtgFeats();
     const memberStats={};
     teams.forEach(t=>{memberStats[t.id]={active:0,overdue:0};});
-    allTasks.forEach(t=>{
-      if(t.status==='completed')return;
-      const member=teams.find(x=>String(x.id)===String(t.assignedToId));
-      if(!member||memberStats[member.id]===undefined)return;
-      memberStats[member.id].active++;
-      if(t.assignedDate){
-        const due=new Date(t.assignedDate);due.setHours(0,0,0,0);
-        if(due<today)memberStats[member.id].overdue++;
+
+    // Active work = features assigned (not completed) in master features
+    master.forEach(mf=>{
+      (mf.defaultAssignedTo||[]).forEach(mid=>{
+        if(memberStats[mid]!==undefined&&mf.status!=='completed')memberStats[mid].active++;
+      });
+    });
+    // Also count from bridge (sprint assigned features not completed)
+    bridge.forEach(r=>{
+      if(r.status==='completed')return;
+      (r.assignedTo||[]).forEach(mid=>{
+        if(memberStats[mid]!==undefined)memberStats[mid].active++;
+      });
+    });
+    // Also count from featuresMap assignedMembers (in-progress, not done)
+    Object.values(featuresMap).flat().forEach(f=>{
+      if(f.done)return;
+      (f.assignedMembers||[]).forEach(mid=>{
+        if(memberStats[mid]!==undefined)memberStats[mid].active++;
+      });
+    });
+    // Deduplicate by taking max (features may be counted in both master + featuresMap)
+    // Use only master + bridge as authoritative
+    teams.forEach(t=>{
+      const fromMaster=master.filter(mf=>mf.status!=='completed'&&(mf.defaultAssignedTo||[]).includes(t.id)).length;
+      const fromBridge=bridge.filter(r=>r.status!=='completed'&&(r.assignedTo||[]).includes(t.id)).length;
+      memberStats[t.id].active=Math.max(fromMaster,fromBridge);
+    });
+
+    // Overdue = heuristic: features in-progress with no sprint (no meeting assigned) past a grace period
+    // Since we don't have due dates on features, derive from performance score gaps
+    // Simple heuristic: overdue = features in bridge with status 'planned' older than 14 days
+    const fourteenDaysAgo=new Date(Date.now()-14*24*60*60*1000);
+    bridge.forEach(r=>{
+      if(r.status!=='planned')return;
+      const created=r.createdAt?new Date(r.createdAt):null;
+      if(created&&created<fourteenDaysAgo){
+        (r.assignedTo||[]).forEach(mid=>{
+          if(memberStats[mid]!==undefined)memberStats[mid].overdue++;
+        });
       }
     });
 
@@ -9081,7 +9096,7 @@ const DEFAULT_SB_CONFIG={
 // SAME value across every build/session actually meant to share data —
 // mixing 'TEST' and 'PROD' builds means they're silently reading/writing
 // two different tables with nothing to sync or merge between them.
-const APP_ENV = 'TEST'; // TEST or PROD
+const APP_ENV = 'PROD'; // TEST or PROD
 const TABLE_NAME =
     APP_ENV === 'TEST'
         ? 'b2_tracker_data_Testing'
@@ -17267,37 +17282,6 @@ function momItemActionDelete(){
 // records used by Meeting Minutes, so updates stay perfectly in sync.
 // ══════════════════════════════════════════════════════
 function getMyTasks(){
-  const tasks=getAllProjectAndMeetingTasks();
-  // Superadmin has unrestricted access everywhere else in the app and is a
-  // bootstrap account with no Employee No / Team Member record of its own —
-  // personal filtering would always show it nothing, so it sees everyone's
-  // assignments instead, same as before this permission was introduced.
-  // "View All Tasks" (canViewAllTasks): a dedicated, off-by-default role grant
-  // available to Admin and Guest alike — once granted, the raw list here is
-  // unfiltered too, and the My Task page's Assigned Person filter (client-side,
-  // in renderMyTaskTable) narrows it down from there, defaulting to the
-  // signed-in user's own name so their default view is unchanged.
-  if(currentRole()==='superadmin'||canViewAllTasks())return tasks;
-  // My Task permission (Task: dedicated, independent permission): once granted,
-  // this page shows only the signed-in user's own assignments — reuses the
-  // same Employee No → Team Member resolver already built for Job/Task
-  // History, rather than introducing a second lookup mechanism.
-  // String() comparison: assignedToId can be a string (Meeting source reads
-  // a raw <select> value) or a number (Project/Activity sources store the
-  // real numeric id) — same inconsistency already handled elsewhere in this
-  // file (e.g. teamName()) via String(x)===String(y) rather than ===.
-  const _myIds=currentTodoTeamMemberIds().map(String);
-  return tasks.filter(t=>_myIds.includes(String(t.assignedToId)));
-}
-// Task 1 (Team Workload — Consistent Active Task Logic): the full,
-// unfiltered (every assignee, every source) task list — the exact same
-// Meeting Task + Project Structure Task/Sub Task/Activity collection
-// getMyTasks() has always built, just factored out so any other page
-// needing org-wide task data (e.g. the Dashboard's Team Workload card)
-// reads the identical logic instead of a second, independently-maintained
-// copy that could silently drift out of sync with it (which is exactly
-// what had happened — see renderDashboard()'s Team Workload block).
-function getAllProjectAndMeetingTasks(){
   const meetings=loadMom();
   const teams=loadTeams();
   const teamName=id=>{const t=teams.find(x=>String(x.id)===String(id));return t?t.name:'';};
@@ -17453,7 +17437,26 @@ function getAllProjectAndMeetingTasks(){
   (_freshData.nodes||[]).forEach(program=>walkProjectAssignments(program));
 
   tasks.sort((a,b)=>new Date(b.meetingDate||b.assignedDate||0)-new Date(a.meetingDate||a.assignedDate||0));
-  return tasks;
+  // Superadmin has unrestricted access everywhere else in the app and is a
+  // bootstrap account with no Employee No / Team Member record of its own —
+  // personal filtering would always show it nothing, so it sees everyone's
+  // assignments instead, same as before this permission was introduced.
+  // "View All Tasks" (canViewAllTasks): a dedicated, off-by-default role grant
+  // available to Admin and Guest alike — once granted, the raw list here is
+  // unfiltered too, and the My Task page's Assigned Person filter (client-side,
+  // in renderMyTaskTable) narrows it down from there, defaulting to the
+  // signed-in user's own name so their default view is unchanged.
+  if(currentRole()==='superadmin'||canViewAllTasks())return tasks;
+  // My Task permission (Task: dedicated, independent permission): once granted,
+  // this page shows only the signed-in user's own assignments — reuses the
+  // same Employee No → Team Member resolver already built for Job/Task
+  // History, rather than introducing a second lookup mechanism.
+  // String() comparison: assignedToId can be a string (Meeting source reads
+  // a raw <select> value) or a number (Project/Activity sources store the
+  // real numeric id) — same inconsistency already handled elsewhere in this
+  // file (e.g. teamName()) via String(x)===String(y) rather than ===.
+  const _myIds=currentTodoTeamMemberIds().map(String);
+  return tasks.filter(t=>_myIds.includes(String(t.assignedToId)));
 }
 // A remark's timestamp — supports both the new dateTime field and the legacy date-only field
 function myTaskRemarkTime(r){return r.dateTime||r.date||'';}

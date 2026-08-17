@@ -9502,7 +9502,16 @@ async function dsSupabaseTestConnection(){
   if(msgEl)msgEl.innerHTML='<span style="color:var(--muted)">⏳ Testing connection…</span>';
   try{
     const sb=await _dsEnsureSupabaseSdk();
-    const testClient=sb.createClient(url,anonKey);
+    // Isolated: this client only ever runs a one-off SELECT to validate
+    // credentials. It never signs a user in, so it must not persist or
+    // auto-refresh a session — doing so by default shared the same
+    // storage key as window._DS._authClient (the real login session),
+    // producing "Multiple GoTrueClient instances" collisions and, worse,
+    // a refresh-token race that could silently invalidate the login
+    // session partway through it.
+    const testClient=sb.createClient(url,anonKey,{
+      auth:{persistSession:false, autoRefreshToken:false, detectSessionInUrl:false}
+    });
     const {error}=await Promise.race([
       testClient.from(TABLE_NAME).select('id').limit(1),
       new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),10000))
@@ -9552,7 +9561,19 @@ async function _dsSupabaseConnectCore(url,anonKey,opts){
     if(window._DS._sbChannel){try{await window._DS._sbClient.removeChannel(window._DS._sbChannel);}catch(e){}window._DS._sbChannel=null;}
     window._DS._sbClient=null;
 
-    const client=sb.createClient(url,anonKey);
+    // Isolated: this client only ever queries/upserts TABLE_NAME with the
+    // anon key and holds the realtime channel — it never signs a user in.
+    // Left at the SDK default (persistSession:true), it silently shared
+    // window._DS._authClient's storage key (same project = same default
+    // key), so both clients ran independent auto-refresh timers against
+    // the SAME stored session. Supabase rotates the refresh token on each
+    // refresh, so whichever client refreshed second could end up holding
+    // an already-invalidated token — a race that would only surface
+    // sometime after boot, not immediately. Disabling session handling
+    // here (this client was never using it) removes that race entirely.
+    const client=sb.createClient(url,anonKey,{
+      auth:{persistSession:false, autoRefreshToken:false, detectSessionInUrl:false}
+    });
 
     // ── Test connectivity / fetch existing row ────────
     let existingPayload=null;

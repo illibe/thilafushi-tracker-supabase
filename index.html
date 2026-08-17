@@ -8260,51 +8260,36 @@ function renderDashboard(){
   if(!teams.length){
     perfDiv.innerHTML='<p style="color:var(--muted2);font-size:12px;padding:8px">No team members yet.</p>';
   } else {
-    // Compute active work and overdue per member from featuresMap and master features
-    const master=loadMasterFeats();
-    const bridge=loadMtgFeats();
+    // Root-cause fix (Team Workload — Wrong Data Source): this previously
+    // computed Active/Overdue entirely from the abandoned legacy Activity
+    // store (masterFeatures/mtgFeats/featuresMap) — data no longer written
+    // by any current workflow (My Task, the Activity Board, and Project
+    // Structure's own Activity Modal all moved off this store), which is
+    // why every member showed 0 regardless of their real assignments.
+    // Task 1: rebuilt on the same canonical task list My Task itself uses
+    // (getAllProjectAndMeetingTasks()), narrowed to exactly "Meeting Tasks
+    // + Activities" per spec — Project Structure Task/Sub Task assignments
+    // are deliberately excluded here, unlike My Task's own broader view.
+    // Active = status !== 'completed' (Pending/In Progress/Review, whichever
+    // of these actually apply to a given source — Meeting Tasks only ever
+    // have Pending/In Progress/Completed, Activities have all four, folded
+    // to this same 3-value vocabulary by getAllProjectAndMeetingTasks()).
+    // Overdue = today past the task's own due date (Meeting Task: the
+    // Meeting Minutes modal's Due Date; Activity: the Activity Modal's Due
+    // Date) — both already surfaced as `assignedDate` on every task object,
+    // so no per-source branching is needed here.
+    const today=new Date();today.setHours(0,0,0,0);
+    const allTasks=getAllProjectAndMeetingTasks().filter(t=>t.source==='Meeting'||t.isActivity);
     const memberStats={};
     teams.forEach(t=>{memberStats[t.id]={active:0,overdue:0};});
-
-    // Active work = features assigned (not completed) in master features
-    master.forEach(mf=>{
-      (mf.defaultAssignedTo||[]).forEach(mid=>{
-        if(memberStats[mid]!==undefined&&mf.status!=='completed')memberStats[mid].active++;
-      });
-    });
-    // Also count from bridge (sprint assigned features not completed)
-    bridge.forEach(r=>{
-      if(r.status==='completed')return;
-      (r.assignedTo||[]).forEach(mid=>{
-        if(memberStats[mid]!==undefined)memberStats[mid].active++;
-      });
-    });
-    // Also count from featuresMap assignedMembers (in-progress, not done)
-    Object.values(featuresMap).flat().forEach(f=>{
-      if(f.done)return;
-      (f.assignedMembers||[]).forEach(mid=>{
-        if(memberStats[mid]!==undefined)memberStats[mid].active++;
-      });
-    });
-    // Deduplicate by taking max (features may be counted in both master + featuresMap)
-    // Use only master + bridge as authoritative
-    teams.forEach(t=>{
-      const fromMaster=master.filter(mf=>mf.status!=='completed'&&(mf.defaultAssignedTo||[]).includes(t.id)).length;
-      const fromBridge=bridge.filter(r=>r.status!=='completed'&&(r.assignedTo||[]).includes(t.id)).length;
-      memberStats[t.id].active=Math.max(fromMaster,fromBridge);
-    });
-
-    // Overdue = heuristic: features in-progress with no sprint (no meeting assigned) past a grace period
-    // Since we don't have due dates on features, derive from performance score gaps
-    // Simple heuristic: overdue = features in bridge with status 'planned' older than 14 days
-    const fourteenDaysAgo=new Date(Date.now()-14*24*60*60*1000);
-    bridge.forEach(r=>{
-      if(r.status!=='planned')return;
-      const created=r.createdAt?new Date(r.createdAt):null;
-      if(created&&created<fourteenDaysAgo){
-        (r.assignedTo||[]).forEach(mid=>{
-          if(memberStats[mid]!==undefined)memberStats[mid].overdue++;
-        });
+    allTasks.forEach(t=>{
+      if(t.status==='completed')return;
+      const member=teams.find(x=>String(x.id)===String(t.assignedToId));
+      if(!member||memberStats[member.id]===undefined)return;
+      memberStats[member.id].active++;
+      if(t.assignedDate){
+        const due=new Date(t.assignedDate);due.setHours(0,0,0,0);
+        if(due<today)memberStats[member.id].overdue++;
       }
     });
 
@@ -9120,55 +9105,19 @@ window._DS={
   },
 
   /** Push data to external source (called by patched save()) */
-  // Root-cause fix (Newly Saved Record Disappearing): every save*() function
-  // calls _onSave() fire-and-forget, with no queue or lock. Two saves fired
-  // close together (e.g. adding a record, then any other field committing a
-  // moment later) become two independent, unordered HTTP upsert requests to
-  // the SAME single row. upsert() has no compare-and-swap check, so whichever
-  // request's response the server happens to process LAST simply overwrites
-  // the row — if that's the older, pre-edit snapshot, it silently erases the
-  // record that was just added, both in Supabase and (via the realtime echo
-  // of that final state) back in the UI. Chaining every push through one
-  // promise so each upsert only starts once the previous one has fully
-  // resolved guarantees they always commit in the exact order they were
-  // called, which is the order the underlying edits actually happened in —
-  // eliminating the possibility of an older save landing after a newer one.
-  //
-  // Correction (No Data Can Be Saved At All — regression in the fix above):
-  // a plain FIFO queue with no timeout means a single request that stalls on
-  // a slow/dropped connection — the exact flaky-network scenario this whole
-  // sync layer already has to tolerate — never resolves or rejects, so every
-  // save queued behind it (from any user, from that point on) waits forever
-  // and NOTHING reaches Supabase again for the rest of the session. Racing
-  // each queued write against a timeout, matching the one already used for
-  // the initial connection test, guarantees the queue always advances: a
-  // stuck request is abandoned (surfacing the existing "could not save"
-  // toast) rather than permanently blocking every save after it. The next
-  // successful save still carries the full current state, so nothing already
-  // entered is lost by a timed-out attempt — it goes out on the next push.
-  _writeQueue:Promise.resolve(),
   _onSave(appData){
     if(this.type==='supabase'){
       if(!this._sbClient){
         console.error('Supabase save skipped: not connected.');
         toast('⚠ Not connected to Supabase — changes are kept locally until reconnected');
       }else{
-        // Snapshot the payload NOW (call time), not when the queued write
-        // actually executes — each push must reflect the state at the
-        // moment it was triggered, same as before.
-        const payload=this._serialize(appData);
-        const client=this._sbClient;
-        this._writeQueue=this._writeQueue.then(()=>
-          Promise.race([
-            client.from(TABLE_NAME).upsert({id:'main',payload,updated_at:new Date().toISOString()}),
-            new Promise(res=>setTimeout(()=>res({error:new Error('Supabase save timed out')}),15000))
-          ]).then(({error})=>{
+        this._sbClient.from(TABLE_NAME).upsert({id:'main',payload:this._serialize(appData),updated_at:new Date().toISOString()})
+          .then(({error})=>{
             if(error){
               console.error('Supabase save error:',error);
               toast('⚠ Could not save to Supabase — changes are kept locally until reconnected');
             }
-          })
-        ).catch(e=>console.error('Supabase queued save error:',e));
+          });
       }
     }
     // sheet and file don't auto-push (manual action required)
@@ -9746,17 +9695,6 @@ async function _dsSupabaseConnectCore(url,anonKey,opts){
 
     // ── Success ────────────────────────────────────────
     window._DS.setDataSource('supabase');
-    // Root-cause fix (Silent Data Loss — Retry/Reconnect): any edits made
-    // while this browser was disconnected (or during the boot window before
-    // the very first successful connect) only ever reached localStorage —
-    // _onSave() is skipped entirely whenever type!=='supabase'. Flushing the
-    // current local state immediately on every successful (re)connect
-    // guarantees those accumulated offline edits are pushed the moment
-    // connectivity returns, instead of silently waiting for the user's next
-    // unrelated edit (which may never come) to trigger the next save().
-    // Safe/idempotent: upsert of the same or newer state either matches the
-    // just-pulled remote row or correctly overwrites it with local changes.
-    try{window._DS._onSave(data);}catch(flushErr){console.error('Post-reconnect flush error:',flushErr);}
     _dsRefreshRows();_dsRefreshStatus();
     const btn=document.getElementById('ds-sb-disconnect-btn');if(btn)btn.style.display='';
     if(msgEl)msgEl.innerHTML='<span style="color:var(--green)">✓ Connected — Supabase realtime sync active.</span>';
@@ -9798,53 +9736,10 @@ async function _dsAutoReconnect(){
     // _dsResolveSbConfig() — the single shared resolver (see above).
     const sbCfg=_dsResolveSbConfig();
     if(sbCfg&&sbCfg.url&&sbCfg.anonKey){
-      const ok=await _dsSupabaseConnectCore(sbCfg.url,sbCfg.anonKey,{silent:true});
-      if(!ok)_dsScheduleReconnectRetry();
+      await _dsSupabaseConnectCore(sbCfg.url,sbCfg.anonKey,{silent:true});
     }
   }catch(e){console.error('Data source auto-reconnect error:',e);}
 }
-
-// Root-cause fix (Silent Data Loss — no retry after a failed/slow connect):
-// previously _dsAutoReconnect() ran exactly once per page load. If that one
-// attempt failed or exceeded the 10s timeout race in _dsSupabaseConnectCore
-// (flaky wifi, a slow corporate proxy, a momentary Supabase blip, a
-// blocked request), window._DS.type was permanently stuck at its default
-// 'local' for the rest of the session — every save() from then on silently
-// wrote to localStorage only, with no further attempt ever made to
-// reconnect. This is believed to be the root cause of "data entered but not
-// persisted to Supabase" being intermittent and browser/network-dependent.
-// Fix: keep retrying with capped exponential backoff, and also retry
-// immediately whenever the browser regains connectivity or the tab
-// regains focus — until a connection actually succeeds. _dsReconnectBusy
-// prevents overlapping attempts if multiple triggers fire close together.
-window._dsReconnectBusy=false;
-window._dsReconnectDelay=3000; // start at 3s, doubles up to a 60s ceiling
-function _dsIsConnected(){return window._DS&&window._DS.type==='supabase'&&window._DS._sbClient!==null;}
-async function _dsAttemptReconnectNow(){
-  if(window._dsReconnectBusy||_dsIsConnected())return;
-  window._dsReconnectBusy=true;
-  try{
-    const sbCfg=_dsResolveSbConfig();
-    if(sbCfg&&sbCfg.url&&sbCfg.anonKey){
-      const ok=await _dsSupabaseConnectCore(sbCfg.url,sbCfg.anonKey,{silent:true});
-      if(ok){window._dsReconnectDelay=3000;return;} // reset backoff on success
-    }
-  }catch(e){console.error('Data source reconnect attempt error:',e);}
-  finally{window._dsReconnectBusy=false;}
-  if(!_dsIsConnected())_dsScheduleReconnectRetry();
-}
-function _dsScheduleReconnectRetry(){
-  if(_dsIsConnected())return;
-  setTimeout(()=>{if(!_dsIsConnected())_dsAttemptReconnectNow();},window._dsReconnectDelay);
-  window._dsReconnectDelay=Math.min(window._dsReconnectDelay*2,60000);
-}
-// Retry the moment the network comes back, or the tab regains focus —
-// covers laptop sleep/wake, wifi handoff, and VPN/proxy blips without
-// waiting out the full backoff delay.
-window.addEventListener('online',()=>{if(!_dsIsConnected())_dsAttemptReconnectNow();});
-document.addEventListener('visibilitychange',()=>{
-  if(document.visibilityState==='visible'&&!_dsIsConnected())_dsAttemptReconnectNow();
-});
 
 // ============================================================================
 // Phase 1 (Supabase Authentication Foundation) — profile helper functions.
@@ -17372,6 +17267,37 @@ function momItemActionDelete(){
 // records used by Meeting Minutes, so updates stay perfectly in sync.
 // ══════════════════════════════════════════════════════
 function getMyTasks(){
+  const tasks=getAllProjectAndMeetingTasks();
+  // Superadmin has unrestricted access everywhere else in the app and is a
+  // bootstrap account with no Employee No / Team Member record of its own —
+  // personal filtering would always show it nothing, so it sees everyone's
+  // assignments instead, same as before this permission was introduced.
+  // "View All Tasks" (canViewAllTasks): a dedicated, off-by-default role grant
+  // available to Admin and Guest alike — once granted, the raw list here is
+  // unfiltered too, and the My Task page's Assigned Person filter (client-side,
+  // in renderMyTaskTable) narrows it down from there, defaulting to the
+  // signed-in user's own name so their default view is unchanged.
+  if(currentRole()==='superadmin'||canViewAllTasks())return tasks;
+  // My Task permission (Task: dedicated, independent permission): once granted,
+  // this page shows only the signed-in user's own assignments — reuses the
+  // same Employee No → Team Member resolver already built for Job/Task
+  // History, rather than introducing a second lookup mechanism.
+  // String() comparison: assignedToId can be a string (Meeting source reads
+  // a raw <select> value) or a number (Project/Activity sources store the
+  // real numeric id) — same inconsistency already handled elsewhere in this
+  // file (e.g. teamName()) via String(x)===String(y) rather than ===.
+  const _myIds=currentTodoTeamMemberIds().map(String);
+  return tasks.filter(t=>_myIds.includes(String(t.assignedToId)));
+}
+// Task 1 (Team Workload — Consistent Active Task Logic): the full,
+// unfiltered (every assignee, every source) task list — the exact same
+// Meeting Task + Project Structure Task/Sub Task/Activity collection
+// getMyTasks() has always built, just factored out so any other page
+// needing org-wide task data (e.g. the Dashboard's Team Workload card)
+// reads the identical logic instead of a second, independently-maintained
+// copy that could silently drift out of sync with it (which is exactly
+// what had happened — see renderDashboard()'s Team Workload block).
+function getAllProjectAndMeetingTasks(){
   const meetings=loadMom();
   const teams=loadTeams();
   const teamName=id=>{const t=teams.find(x=>String(x.id)===String(id));return t?t.name:'';};
@@ -17527,26 +17453,7 @@ function getMyTasks(){
   (_freshData.nodes||[]).forEach(program=>walkProjectAssignments(program));
 
   tasks.sort((a,b)=>new Date(b.meetingDate||b.assignedDate||0)-new Date(a.meetingDate||a.assignedDate||0));
-  // Superadmin has unrestricted access everywhere else in the app and is a
-  // bootstrap account with no Employee No / Team Member record of its own —
-  // personal filtering would always show it nothing, so it sees everyone's
-  // assignments instead, same as before this permission was introduced.
-  // "View All Tasks" (canViewAllTasks): a dedicated, off-by-default role grant
-  // available to Admin and Guest alike — once granted, the raw list here is
-  // unfiltered too, and the My Task page's Assigned Person filter (client-side,
-  // in renderMyTaskTable) narrows it down from there, defaulting to the
-  // signed-in user's own name so their default view is unchanged.
-  if(currentRole()==='superadmin'||canViewAllTasks())return tasks;
-  // My Task permission (Task: dedicated, independent permission): once granted,
-  // this page shows only the signed-in user's own assignments — reuses the
-  // same Employee No → Team Member resolver already built for Job/Task
-  // History, rather than introducing a second lookup mechanism.
-  // String() comparison: assignedToId can be a string (Meeting source reads
-  // a raw <select> value) or a number (Project/Activity sources store the
-  // real numeric id) — same inconsistency already handled elsewhere in this
-  // file (e.g. teamName()) via String(x)===String(y) rather than ===.
-  const _myIds=currentTodoTeamMemberIds().map(String);
-  return tasks.filter(t=>_myIds.includes(String(t.assignedToId)));
+  return tasks;
 }
 // A remark's timestamp — supports both the new dateTime field and the legacy date-only field
 function myTaskRemarkTime(r){return r.dateTime||r.date||'';}

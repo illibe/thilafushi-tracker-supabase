@@ -11045,7 +11045,22 @@ function toggleDependencyDropdown(e){
   }
 }
 
-let idCounter=1000;
+// Root-cause fix (New Program/Phase/Task Disappearing After a Moment):
+// idCounter used to start at a fixed 1000 and was only advanced once this
+// browser had actually seen a full node tree (local cache at boot, or the
+// Supabase payload once its async fetch resolves — see initIdCounter()).
+// Any node created in the gap before that Supabase fetch completes could
+// be assigned an id that coincidentally already belonged to a real, older,
+// different node sitting in Supabase that just hadn't loaded into this
+// browser yet. When the hydrate/merge then ran, _dsMergeIncomingNodes
+// treats a matching id as "the same node, remote wins" — silently
+// discarding the just-created node in favor of the unrelated older one.
+// Seeding from the current timestamp instead makes every new id far
+// larger than anything the old incrementing scheme (starting at 1000)
+// could ever have produced, so this collision can no longer happen
+// regardless of hydrate timing. initIdCounter()'s existing "advance past
+// the highest id seen" logic is unchanged and still applies on top.
+let idCounter=Date.now();
 function mkNode(name,progress,persons,children,level){
   return{id:++idCounter,name,progress:progress||0,persons:persons||'',teamMembers:[],remarks:'',history:[],children:children||[],level:level||0,open:level<2};
 }

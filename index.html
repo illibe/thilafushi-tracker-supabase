@@ -9108,19 +9108,64 @@ window._DS={
   _onSave(appData){
     if(this.type==='supabase'){
       if(!this._sbClient){
-        console.error('Supabase save skipped: not connected.');
-        toast('⚠ Not connected to Supabase — changes are kept locally until reconnected');
+        console.error('Supabase save skipped: not connected — attempting self-heal reconnect.');
+        this._selfHealAndRetry(appData);
       }else{
         this._sbClient.from(TABLE_NAME).upsert({id:'main',payload:this._serialize(appData),updated_at:new Date().toISOString()})
           .then(({error})=>{
             if(error){
-              console.error('Supabase save error:',error);
-              toast('⚠ Could not save to Supabase — changes are kept locally until reconnected');
+              console.error('Supabase save error:',error,'— attempting self-heal reconnect.');
+              this._selfHealAndRetry(appData);
             }
           });
       }
     }
     // sheet and file don't auto-push (manual action required)
+  },
+
+  // Root-cause fix (Data Entry Silently Blocked For Hours): _dsAutoReconnect()
+  // only ever runs once per full page load (guarded by window._dsAutoReconnected)
+  // — if that single attempt has a bad moment, or the live connection is lost
+  // later for any reason (network blip, laptop sleep, momentary Supabase-side
+  // issue), _sbClient stays broken for the rest of the session. Previously
+  // _onSave just showed a toast and gave up — no code path anywhere ever tried
+  // the connection again short of a full page refresh or the user manually
+  // reopening Settings. That's what turned a transient hiccup into "stuck for
+  // hours, no visible error, until something unrelated happens to trigger a
+  // reconnect." This makes a blocked/failed save repair the connection and
+  // retry itself once, throttled to 5s between attempts so a genuinely down
+  // Supabase project doesn't get hammered with reconnect attempts.
+  _selfHealing:false,
+  _lastSelfHealAttempt:0,
+  async _selfHealAndRetry(appData){
+    const now=Date.now();
+    if(this._selfHealing||(now-this._lastSelfHealAttempt)<5000)return;
+    this._selfHealing=true;
+    this._lastSelfHealAttempt=now;
+    try{
+      const sbCfg=_dsResolveSbConfig();
+      if(!sbCfg||!sbCfg.url||!sbCfg.anonKey){
+        toast('⚠ Not connected to Supabase — changes are kept locally until reconnected');
+        return;
+      }
+      const ok=await _dsSupabaseConnectCore(sbCfg.url,sbCfg.anonKey,{silent:true});
+      if(ok&&this._sbClient){
+        const{error}=await this._sbClient.from(TABLE_NAME).upsert({id:'main',payload:this._serialize(appData),updated_at:new Date().toISOString()});
+        if(error){
+          console.error('Supabase save error after self-heal reconnect:',error);
+          toast('⚠ Could not save to Supabase — changes are kept locally until reconnected');
+        }else{
+          toast('✓ Reconnected — your changes are synced');
+        }
+      }else{
+        toast('⚠ Not connected to Supabase — changes are kept locally until reconnected');
+      }
+    }catch(e){
+      console.error('Supabase self-heal reconnect failed:',e);
+      toast('⚠ Not connected to Supabase — changes are kept locally until reconnected');
+    }finally{
+      this._selfHealing=false;
+    }
   },
 
   /** Build the unified JSON structure from app state */

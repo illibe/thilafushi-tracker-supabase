@@ -2630,9 +2630,6 @@ create policy "public read/write (testing)" on b2_tracker_data
           <option value="Outsource">Outsource</option>
         </select>
       </div>
-      <div class="field" id="field-progress-wrap"><label>Progress</label>
-        <div class="progress-slider"><input type="range" id="field-progress" min="0" max="100" value="0" oninput="document.getElementById('field-progress-val').textContent=this.value+'%'"><span class="val-display" id="field-progress-val">0%</span></div>
-      </div>
       <div class="field-row" id="field-dates-wrap" style="display:none">
         <div class="field"><label>Start Date</label><input type="date" id="field-start-date" onchange="validatePhaseDates()"></div>
         <div class="field"><label>End Date</label><input type="date" id="field-end-date" onchange="validatePhaseDates()"></div>
@@ -2713,6 +2710,10 @@ create policy "public read/write (testing)" on b2_tracker_data
       <div class="field" id="field-persons-wrap">
         <label>Responsible Team <button type="button" class="btn btn-ghost btn-xs" onclick="openMemberPicker()" style="margin-left:6px">👥 Pick from Team</button></label>
         <div id="picked-members" class="member-picker" style="margin-top:5px;min-height:32px;"></div>
+      </div>
+      <div class="field" id="field-progress-wrap" style="display:none"><label>Progress</label>
+        <div class="progress-slider"><input type="range" id="field-progress" min="0" max="100" value="0" oninput="document.getElementById('field-progress-val').textContent=this.value+'%'"><span class="val-display" id="field-progress-val">0%</span></div>
+        <div id="field-progress-hint" style="display:none;font-size:11px;color:var(--muted);margin-top:4px">Calculated automatically from this Sub Task's Activities</div>
       </div>
       <div class="field" id="field-remarks-wrap"><label>Remarks / Notes</label><textarea id="field-remarks" placeholder="Any notes or updates…"></textarea></div>
       <div class="field" id="field-update-note-wrap" style="display:none">
@@ -11722,15 +11723,25 @@ function calcProgress(node){
     const _totalItems=_taskCount+_featCount;
     if(!_totalItems)return node.progress||0;
 
-    // A task is "done" when its own calcProgress returns 100
-    const _doneTasks=_tasks.filter(t=>calcProgress(t)===100).length;
-    const _doneFeats=_subFeats.filter(f=>f.done||f.progress===100).length;
-    const _doneItems=_doneTasks+_doneFeats;
-    return Math.round(_doneItems/_totalItems*100);
+    // A Sub Task contributes its actual calculated progress (0-100), not
+    // just whether it happens to be exactly 100% — see comment above.
+    const _taskProgressSum=_tasks.reduce((sum,t)=>sum+calcProgress(t),0);
+    const _featProgressSum=_subFeats.reduce((sum,f)=>sum+((f.done||f.progress===100)?100:0),0);
+    return Math.round((_taskProgressSum+_featProgressSum)/_totalItems);
   }
   // L0 (App) and L1 (Module): pure average of children
   if(!children.length)return node.progress||0;
   return Math.round(children.reduce((a,c)=>a+calcProgress(c),0)/children.length);
+}
+// Task 1 (Redesign Subtask Modal — Progress): mirrors calcProgress()'s own
+// lvl===3 Activity-detection exactly (legacy level-4 tree children OR
+// featuresMap entries) so "does this Sub Task have Activities" can never
+// disagree between the modal's enable/disable state and the actual rollup.
+function subtaskHasActivities(node){
+  if(!node)return false;
+  const feats=(node.children||[]).filter(c=>(c.level||0)===4);
+  const mapFeats=featuresMap[node.id]||[];
+  return feats.length>0||mapFeats.length>0;
 }
 function countAll(nodes){let tasks=0,mods=0;for(const n of nodes){mods++;if(n.children&&n.children.length){const c=countAll(n.children);tasks+=c.tasks;mods+=c.mods;}else tasks++;}return{tasks,mods};}
 function progressColor(p){return p>=80?'var(--green)':p>=40?'var(--accent)':p>0?'var(--amber)':'var(--muted2)';}
@@ -16121,8 +16132,22 @@ function openAddModal(parentId,level){
   // Task 2 (Phase Update History): only meaningful once a Phase exists to
   // attach history to, so it never shows while adding a brand-new one.
   document.getElementById('field-phase-history-wrap').style.display='none';
-  // Progress slider: hidden in Add mode (removed from Add Job modal per Task 2); still editable when editing an existing Job
-  document.getElementById('field-progress-wrap').style.display='none'; // Task 2: Progress Bar removed from Add Job modal
+  // Progress slider: hidden in Add mode for every level except Sub Task
+  // (Task 2: removed from Add Job modal). Task 1 (Redesign Subtask Modal):
+  // re-added for a new Sub Task (level 3) — always enabled here, since a
+  // brand-new node cannot have Activities yet.
+  {
+    const _pw=document.getElementById('field-progress-wrap');
+    const _ps=document.getElementById('field-progress');
+    const _ph=document.getElementById('field-progress-hint');
+    if(level===3){
+      _pw.style.display='';
+      _ps.disabled=false;
+      _ph.style.display='none';
+    }else{
+      _pw.style.display='none';
+    }
+  }
   document.getElementById('field-persons-wrap').style.display=level<=3?'':'none'; // Task 1 (Gantt Assigned To): extended to Task/Sub Task so schedules can show who's assigned
   // Task 1: Phase (level 1) now also has Start/End Date fields, constrained to the parent Project's date range
   // Task 2 (Gantt Chart support): also shown for Task (level 2) and Sub Task
@@ -16328,16 +16353,36 @@ function openEditModal(id){
   _depCurrentProjectId=(lvl===2||lvl===3)?(depFindProjectAncestor(node.id)||{}).id:null;
   if(lvl===2||lvl===3)depUpdateSummary();
   document.getElementById('field-dependency-panel').style.display='none';
-  // Progress: removed entirely at L0 (Edit Project), L1, L2 (Edit Job),
-  // L3 (Edit Subtask — Task 1: Progress Bar removed from the Subtask
-  // modal), and L4 (Feature = Done/Not Done only, no bar at all).
+  // Progress: removed entirely at L0 (Edit Project), L1, L2 (Edit Job), and
+  // L4 (Feature = Done/Not Done only, no bar at all). Task 1 (Redesign
+  // Subtask Modal — Progress): re-added for L3 (Edit Sub Task) — enabled for
+  // manual entry when this Sub Task has no Activities; disabled and showing
+  // the live Activity-calculated value (via the existing calcProgress()
+  // Activity completion rule, unchanged) when it does. The stored
+  // node.progress itself is left exactly as-is in the Activity-driven case —
+  // see saveModal()'s matching guard — so no value is migrated or lost.
   const progWrap=document.getElementById('field-progress-wrap');
   const progSlider=document.getElementById('field-progress');
+  const progHint=document.getElementById('field-progress-hint');
   if(lvl===4){progWrap.style.display='none';} // Feature = Done/Not Done only
   else if(lvl===0){progWrap.style.display='none';} // Task 1: Remove Progress Bar from Edit Project modal
   else if(lvl===1){progWrap.style.display='none';} // Task 1: Remove Progress Bar from Edit Project modal (Gantt Chart ticket)
   else if(lvl===2){progWrap.style.display='none';} // Task 1: Remove Progress Bar from Edit Job modal
-  else if(lvl===3){progWrap.style.display='none';} // Task 1: Remove Progress Bar from Edit Subtask modal
+  else if(lvl===3){
+    progWrap.style.display='';
+    if(subtaskHasActivities(node)){
+      progSlider.disabled=true;
+      const _auto=calcProgress(node);
+      progSlider.value=_auto;
+      document.getElementById('field-progress-val').textContent=_auto+'%';
+      progHint.style.display='';
+    }else{
+      progSlider.disabled=false;
+      progSlider.value=node.progress||0;
+      document.getElementById('field-progress-val').textContent=(node.progress||0)+'%';
+      progHint.style.display='none';
+    }
+  }
   else{progWrap.style.display='';progSlider.disabled=true;} // auto-calc, show but locked
   document.getElementById('modal').classList.add('open');
 }
@@ -16641,10 +16686,12 @@ function saveModal(){
     // priority — unchanged from existing behavior for every other case.
     const remarksChanged=(node.level||0)===3&&node.remarks!==remarks;
     const effectiveNote=note||(remarksChanged?remarks:'');
-    const changed=node.progress!==progress||node.name!==name||node.remarks!==remarks||!!note;
+    const _progressForCompare=((node.level||0)===3&&subtaskHasActivities(node))?node.progress:progress;
+    const changed=node.progress!==_progressForCompare||node.name!==name||node.remarks!==remarks||!!note;
     let _tplEditNote=null;
     // Task 1: team assignment now solely via the Team Picker (teamMembers) — node.persons (legacy free text) is left untouched
-    node.name=name;node.progress=progress;node.remarks=remarks;node.teamMembers=teamMembers;
+    node.name=name;node.remarks=remarks;node.teamMembers=teamMembers;
+    if(!((node.level||0)===3&&subtaskHasActivities(node))){node.progress=progress;}
     if((node.level||0)>=0&&(node.level||0)<=3){node.startDate=startDate;node.endDate=endDate;}
     if((node.level||0)===0||(node.level||0)===1){node.budget=budget;}
     if((node.level||0)===2||(node.level||0)===3){node.isMilestone=isMilestone;node.dependencies=dependencies;}

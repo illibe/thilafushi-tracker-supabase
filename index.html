@@ -3541,7 +3541,7 @@ function saveMasterFeats(f){
   // Root-cause fix: same missing push as saveMomList — see there for the full explanation.
   if(window._DS&&window._DS.type!=='local'&&!window._DS._applyingRemote)window._DS._onSave(data);
 }
-let mfIdC=6000;
+let mfIdC=Date.now(); // Root-cause fix (Data Disappearing — Master Features): same id-collision race as the main tree's idCounter fix; see that comment for the full explanation.
 function initMfId(){
   const mf=loadMasterFeats();
   mf.forEach(f=>{if(f.id>=mfIdC)mfIdC=f.id+1;});
@@ -3627,7 +3627,7 @@ function saveMtgFeats(mf){
   // Root-cause fix: same missing push as saveMomList — see there for the full explanation.
   if(window._DS&&window._DS.type!=='local'&&!window._DS._applyingRemote)window._DS._onSave(data);
 }
-let mfeIdC=7000;
+let mfeIdC=Date.now(); // Root-cause fix (Data Disappearing — Meeting Features): same id-collision race as the main tree's idCounter fix.
 function initMfeId(){const mf=loadMtgFeats();mf.forEach(r=>{if(r.id>=mfeIdC)mfeIdC=r.id+1;});}
 
 function getMtgFeatRecord(meetingId,featureId){
@@ -5365,7 +5365,7 @@ function _dsPruneTombstonedTeams(teams){
   const tombstones=loadDeletedTeamsTombstone();
   return (teams||[]).filter(t=>t&&!tombstones[t.id]);
 }
-let tmIdC=7000;
+let tmIdC=Date.now(); // Root-cause fix (Data Disappearing — Teams): same id-collision race as the main tree's idCounter fix.
 function initTmId(){const t=loadTeams();t.forEach(m=>{if(m.id>=tmIdC)tmIdC=m.id+1;});}
 
 // Task 1 (Template Management): a Template's structure is independent of
@@ -5378,7 +5378,7 @@ function saveTemplates(t){
   localStorage.setItem(TEMPLATES_KEY,JSON.stringify(t));
   if(window._DS&&window._DS.type!=='local'&&!window._DS._applyingRemote)window._DS._onSave(data);
 }
-let tplIdC=9000;
+let tplIdC=Date.now(); // Root-cause fix (Data Disappearing — Templates): same id-collision race as the main tree's idCounter fix.
 function initTplId(){
   const walk=(list)=>{(list||[]).forEach(t=>{if(t.id>=tplIdC)tplIdC=t.id+1;(t.jobs||[]).forEach(j=>{if(j.id>=tplIdC)tplIdC=j.id+1;(j.tasks||[]).forEach(k=>{if(k.id>=tplIdC)tplIdC=k.id+1;});});});};
   walk(loadTemplates());
@@ -5485,7 +5485,7 @@ function saveMeetings(m){
   localStorage.setItem(MEETINGS_KEY,JSON.stringify(m));
   if(window._DS&&window._DS.type!=='local'&&!window._DS._applyingRemote)window._DS._onSave(data);
 }
-let mtgIdC=8000;
+let mtgIdC=Date.now(); // Root-cause fix (Data Disappearing — Meetings): same id-collision race as the main tree's idCounter fix.
 function initMtgId(){const m=loadMeetings();m.forEach(x=>{if(x.id>=mtgIdC)mtgIdC=x.id+1;});}
 
 // Per-meeting attendance: {memberId, status:'present'|'absent'|'leave'}
@@ -6658,7 +6658,7 @@ function confirmSelFeats(){
   renderMtgBacklogTable();
   toast(added+' feature(s) added to sprint');
 }
-let blIdC=9000;
+let blIdC=Date.now(); // Root-cause fix (Data Disappearing — Backlog): same id-collision race as the main tree's idCounter fix.
 function initBlId(){const b=loadBacklog();b.forEach(x=>{if(x.id>=blIdC)blIdC=x.id+1;});}
 
 let blPickedMembers=[];
@@ -8712,7 +8712,7 @@ function logSystemEvent(eventType,username,employeeNo,status){
   return entry;
 }
 
-let msIdC=1;
+let msIdC=Date.now(); // Root-cause fix (Data Disappearing — Milestones): same id-collision race as the main tree's idCounter fix.
 
 function loadMilestones(){try{return JSON.parse(localStorage.getItem(MILESTONES_KEY))||[];}catch(e){return[];}}
 function saveMilestones(arr){
@@ -9108,20 +9108,49 @@ window._DS={
   /** Push data to external source (called by patched save()) */
   _onSave(appData){
     if(this.type==='supabase'){
-      if(!this._sbClient){
-        console.error('Supabase save skipped: not connected — attempting self-heal reconnect.');
-        this._selfHealAndRetry(appData);
-      }else{
-        this._sbClient.from(TABLE_NAME).upsert({id:'main',payload:this._serialize(appData),updated_at:new Date().toISOString()})
-          .then(({error})=>{
-            if(error){
-              console.error('Supabase save error:',error,'— attempting self-heal reconnect.');
-              this._selfHealAndRetry(appData);
-            }
-          });
-      }
+      this._pendingSaveData=appData; // always the LATEST state — older ones are superseded, never sent
+      this._saveQueue=(this._saveQueue||Promise.resolve()).then(()=>this._flushPendingSave());
     }
     // sheet and file don't auto-push (manual action required)
+  },
+
+  // Root-cause fix (Data Disappears/Reverts — Single User, No Firebase/Multi-
+  // User Involved): every save() call used to kick off its own independent,
+  // unawaited upsert. Since almost every UI action in this app calls save()
+  // (typing a field, closing a modal, expanding a tree row), two saves fired
+  // moments apart produced two uncoordinated network requests to the SAME
+  // database row. Because each request overwrites the whole row (not a
+  // per-field update), whichever request happened to reach Postgres LAST
+  // won — regardless of which one was actually triggered last. A slightly
+  // slower network response for an OLDER save could silently overwrite a
+  // NEWER one, and the browser would then receive a genuine real-time
+  // confirmation of that reverted state and match it — no error, no
+  // warning, the edit just quietly disappears. This queue makes that
+  // ordering race structurally impossible: at most one upsert is ever in
+  // flight, and _pendingSaveData always holds only the MOST RECENT state —
+  // so the next flush (once the current request finishes) can only ever
+  // send the latest data, never an older one that arrived first.
+  _saveQueue:Promise.resolve(),
+  _pendingSaveData:null,
+  async _flushPendingSave(){
+    if(this._pendingSaveData===null)return;
+    const toSave=this._pendingSaveData;
+    this._pendingSaveData=null; // claimed — a save() during the request below will queue its own flush after this one
+    if(!this._sbClient){
+      console.error('Supabase save skipped: not connected — attempting self-heal reconnect.');
+      await this._selfHealAndRetry(toSave);
+      return;
+    }
+    try{
+      const{error}=await this._sbClient.from(TABLE_NAME).upsert({id:'main',payload:this._serialize(toSave),updated_at:new Date().toISOString()});
+      if(error){
+        console.error('Supabase save error:',error,'— attempting self-heal reconnect.');
+        await this._selfHealAndRetry(toSave);
+      }
+    }catch(e){
+      console.error('Supabase save threw:',e,'— attempting self-heal reconnect.');
+      await this._selfHealAndRetry(toSave);
+    }
   },
 
   // Root-cause fix (Data Entry Silently Blocked For Hours): _dsAutoReconnect()
@@ -11626,7 +11655,7 @@ function getAssignableProjectsForFilter(){
 // FEATURES — featuresMap is a computed view over master features
 let featuresMap={};
 try{featuresMap=JSON.parse(localStorage.getItem(FEAT_KEY))||{};}catch(e){featuresMap={};}
-let featIdC=5000;
+let featIdC=Date.now(); // Root-cause fix (Data Disappearing — Activities): same id-collision race as the main tree's idCounter fix. This is the counter behind the Activities feature the Subtask Progress field depends on.
 // Sync featIdC with master counter
 Object.values(featuresMap).forEach(arr=>arr.forEach(f=>{if(f.id>=featIdC)featIdC=f.id+1;}));
 function saveFeatures(){

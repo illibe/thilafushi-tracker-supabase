@@ -9585,7 +9585,7 @@ async function dsSupabaseTestConnection(){
     // a refresh-token race that could silently invalidate the login
     // session partway through it.
     const testClient=sb.createClient(url,anonKey,{
-      auth:{persistSession:false, autoRefreshToken:false, detectSessionInUrl:false}
+      auth:{persistSession:false, autoRefreshToken:false, detectSessionInUrl:false, storageKey:'b2_test_client_iso'}
     });
     const {error}=await Promise.race([
       testClient.from(TABLE_NAME).select('id').limit(1),
@@ -9647,7 +9647,7 @@ async function _dsSupabaseConnectCore(url,anonKey,opts){
     // sometime after boot, not immediately. Disabling session handling
     // here (this client was never using it) removes that race entirely.
     const client=sb.createClient(url,anonKey,{
-      auth:{persistSession:false, autoRefreshToken:false, detectSessionInUrl:false}
+      auth:{persistSession:false, autoRefreshToken:false, detectSessionInUrl:false, storageKey:'b2_data_client_iso'}
     });
 
     // ── Test connectivity / fetch existing row ────────
@@ -9964,7 +9964,7 @@ async function _dsCreateSupabaseAuthAndProfile(fields){
   try{
     sb=await _dsEnsureSupabaseSdk();
     tempClient=sb.createClient(sbCfg.url, sbCfg.anonKey, {
-      auth:{persistSession:false, autoRefreshToken:false, detectSessionInUrl:false}
+      auth:{persistSession:false, autoRefreshToken:false, detectSessionInUrl:false, storageKey:'b2_temp_client_iso'}
     });
     console.log('email = >'+email+'<');
     console.log('email.length =',email.length);

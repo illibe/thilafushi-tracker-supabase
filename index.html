@@ -9743,6 +9743,10 @@ async function _dsSupabaseConnectCore(url,anonKey,opts){
             initIdCounter(data.nodes);
             if(_dedupeNodeIds(data.nodes)){changed=true;save();saveFeatures();}
           }
+          if(window._dsMergeKeptLocalEdit){
+            window._dsMergeKeptLocalEdit=false;
+            save(); // correct the shared row — not just this tab's own view
+          }
           if(changed){
             render();updateStats();
             if(document.getElementById('page-users')&&document.getElementById('page-users').classList.contains('active'))renderUserTable();
@@ -9783,6 +9787,10 @@ async function _dsSupabaseConnectCore(url,anonKey,opts){
       if(existingPayload.mom)saveMomList(Array.isArray(existingPayload.mom)?existingPayload.mom:Object.values(existingPayload.mom));
       if(existingPayload.mtgFeats)saveMtgFeats(Array.isArray(existingPayload.mtgFeats)?existingPayload.mtgFeats:Object.values(existingPayload.mtgFeats));
       if(_sbDeduped){save();saveFeatures();}
+      if(window._dsMergeKeptLocalEdit){
+        window._dsMergeKeptLocalEdit=false;
+        save(); // correct the shared row — not just this tab's own view
+      }
       render();updateStats();
     }else{
       const {error:upsertErr}=await client.from(TABLE_NAME).upsert({id:'main',payload:window._DS._serialize(data),updated_at:new Date().toISOString()});
@@ -11290,7 +11298,25 @@ function mergeIncomingNodeTombstones(remoteDeleted){
 // yet contain is preserved, reattached under its correct local parent —
 // unless it's tombstoned as deleted. Nodes present in both keep the
 // remote's version (remote is authoritative once synced).
+// Root-cause fix (Edits Reverted Across Devices/Tabs) — helpers for
+// per-node conflict resolution in _dsMergeIncomingNodes below.
+function _dsNodeLastModified(n){
+  if(n&&Array.isArray(n.history)&&n.history.length){
+    const last=n.history[n.history.length-1];
+    if(last&&last.ts){const t=new Date(last.ts).getTime();if(!isNaN(t))return t;}
+  }
+  return 0; // no history — always loses to a side that has any recorded edit
+}
+function _dsApplyNodeFields(target,source){
+  // Content fields only — never id/level/children, which are structural
+  // and handled separately by the surrounding merge.
+  ['name','progress','remarks','budget','dueDate','endDate','priority','persons',
+   'teamMembers','taskType','phaseType','startDate','systemTaskCode','qty',
+   'nosQty','isMilestone','executionMode','dependencies','history'
+  ].forEach(f=>{ if(source[f]!==undefined) target[f]=source[f]; });
+}
 function _dsMergeIncomingNodes(remoteNodes){
+  window._dsMergeKeptLocalEdit=false; // Root-cause fix (Stale Session Reverts Shared Data) — see below
   const remote=_normalizeNodeTree(JSON.parse(JSON.stringify(Array.isArray(remoteNodes)?remoteNodes:Object.values(remoteNodes||{}))));
   const remoteById=new Map();
   (function index(list){(list||[]).forEach(n=>{remoteById.set(n.id,n);index(n.children);});})(remote);
@@ -11308,6 +11334,17 @@ function _dsMergeIncomingNodes(remoteNodes){
     (list||[]).forEach(n=>{
       if(tombstones[n.id])return; // deliberately deleted — never resurrect
       if(remoteById.has(n.id)){
+        // Root-cause fix (Edits Reverted Across Devices/Tabs): don't
+        // unconditionally trust the remote copy of a node that exists on
+        // both sides — compare each side's own last-edit timestamp (from
+        // its history log) and keep whichever is actually newer for THIS
+        // node specifically. The remote's subtree/children are left as-is
+        // either way; only this node's own content fields can be replaced.
+        const remoteNode=remoteById.get(n.id);
+        if(_dsNodeLastModified(n)>_dsNodeLastModified(remoteNode)){
+          _dsApplyNodeFields(remoteNode,n);
+          window._dsMergeKeptLocalEdit=true;
+        }
         walkLocal(n.children||[]); // exists remotely; still check its children for local-only additions
         return;
       }

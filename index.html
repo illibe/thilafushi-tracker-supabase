@@ -18559,6 +18559,13 @@ document.getElementById('stats-bar').style.display='none';
 hideAllPages();
 applySidePaneState();
 initTmId();initMtgId();initMfId();initMfeId();initMsId();initTplId();
+window.addEventListener('beforeunload',function(e){
+  if(window._DS&&window._DS.type==='supabase'&&(window._DS._pendingSaveData!==null||window._DS._selfHealing)){
+    e.preventDefault();
+    e.returnValue='Your latest changes are still being saved. Leaving now may lose them.';
+    return e.returnValue;
+  }
+});
 // Task Fix (Records With The Same Name Affecting Each Other / Phase Missing
 // Children): sync idCounter against whatever Project Structure data is
 // already loaded, then repair any id collisions and any flat-sibling

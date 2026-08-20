@@ -9763,7 +9763,7 @@ async function _dsSupabaseConnectCore(url,anonKey,opts){
     // ── Seed data: pull existing row if present, else push current state ──
     if(existingPayload&&existingPayload.modules){
       mergeIncomingNodeTombstones(existingPayload.deletedNodes);
-      data=Object.assign({},data,{nodes:_dsMergeIncomingNodes(existingPayload.modules)});
+      data=Object.assign({},data,{nodes:_dsMergeIncomingNodes(existingPayload.modules,false)});
       localStorage.setItem(STORE_KEY,JSON.stringify(data));
       // Root-cause fix (Duplicate Node ID repair): see matching comment in the
       // realtime handler below — same repair, applied on initial load too, since
@@ -9787,10 +9787,7 @@ async function _dsSupabaseConnectCore(url,anonKey,opts){
       if(existingPayload.mom)saveMomList(Array.isArray(existingPayload.mom)?existingPayload.mom:Object.values(existingPayload.mom));
       if(existingPayload.mtgFeats)saveMtgFeats(Array.isArray(existingPayload.mtgFeats)?existingPayload.mtgFeats:Object.values(existingPayload.mtgFeats));
       if(_sbDeduped){save();saveFeatures();}
-      if(window._dsMergeKeptLocalEdit){
-        window._dsMergeKeptLocalEdit=false;
-        save(); // correct the shared row — not just this tab's own view
-      }
+      window._dsMergeKeptLocalEdit=false; // boot hydrate: never trust a possibly-stale local cache enough to repush it — see comment above
       render();updateStats();
     }else{
       const {error:upsertErr}=await client.from(TABLE_NAME).upsert({id:'main',payload:window._DS._serialize(data),updated_at:new Date().toISOString()});
@@ -11315,7 +11312,8 @@ function _dsApplyNodeFields(target,source){
    'nosQty','isMilestone','executionMode','dependencies','history'
   ].forEach(f=>{ if(source[f]!==undefined) target[f]=source[f]; });
 }
-function _dsMergeIncomingNodes(remoteNodes){
+function _dsMergeIncomingNodes(remoteNodes,trustLocalOnConflict){
+  if(trustLocalOnConflict===undefined)trustLocalOnConflict=true; // live realtime path: local reflects an active editing session, trust it
   window._dsMergeKeptLocalEdit=false; // Root-cause fix (Stale Session Reverts Shared Data) — see below
   const remote=_normalizeNodeTree(JSON.parse(JSON.stringify(Array.isArray(remoteNodes)?remoteNodes:Object.values(remoteNodes||{}))));
   const remoteById=new Map();
@@ -11341,7 +11339,7 @@ function _dsMergeIncomingNodes(remoteNodes){
         // node specifically. The remote's subtree/children are left as-is
         // either way; only this node's own content fields can be replaced.
         const remoteNode=remoteById.get(n.id);
-        if(_dsNodeLastModified(n)>_dsNodeLastModified(remoteNode)){
+        if(trustLocalOnConflict&&_dsNodeLastModified(n)>_dsNodeLastModified(remoteNode)){
           _dsApplyNodeFields(remoteNode,n);
           window._dsMergeKeptLocalEdit=true;
         }
